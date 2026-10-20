@@ -1,0 +1,35 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Modules\Central\Database\Seeders;
+
+use App\Modules\Central\Models\Domain;
+use App\Modules\Central\Models\Plan;
+use App\Modules\Central\Services\TenantProvisioner;
+use App\Modules\Core\Tenancy\TenantProvisioningData;
+use Illuminate\Database\Seeder;
+
+/**
+ * Local-only demo tenant at http://acme.localhost:5173 with its Tenant Admin.
+ * Credentials come from config('ams.seed') (SEED_DEMO_ADMIN_* in .env) (defaults in .env.example).
+ */
+final class DemoTenantSeeder extends Seeder
+{
+    public function run(TenantProvisioner $provisioner): void
+    {
+        if (Domain::query()->where('domain', 'acme')->exists()) {
+            return;
+        }
+
+        $provisioner->provision(new TenantProvisioningData(
+            name: 'Acme Corporation',
+            subdomain: 'acme',
+            planId: (int) Plan::query()->where('slug', 'business')->value('id'),
+            timezone: 'Asia/Karachi',
+            adminName: 'Acme Admin',
+            adminEmail: (string) config('ams.seed.demo_admin_email'),
+            adminPassword: (string) config('ams.seed.demo_admin_password'),
+        ));
+    }
+}

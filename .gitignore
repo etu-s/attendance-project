@@ -1,0 +1,46 @@
+*.log
+.DS_Store
+.env
+.env.backup
+.env.production
+.phpactor.json
+.phpunit.result.cache
+/.codex
+/.cursor/
+/.idea
+/.nova
+/.phpunit.cache
+/.vscode
+/.zed
+/auth.json
+/node_modules
+/public/build
+/public/fonts-manifest.dev.json
+/public/hot
+/public/storage
+/storage/*.key
+/storage/pail
+/vendor
+_ide_helper.php
+Homestead.json
+Homestead.yaml
+Thumbs.db
+
+# SQLite databases (central + per-tenant) and their WAL/SHM side files
+/database/*.sqlite
+/database/tenants/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite-journal
+
+# Backups (VACUUM INTO output)
+/storage/backups/
+
+# Frontend
+/frontend/node_modules
+/frontend/dist
+
+# Local tooling (machine-specific paths/ports)
+/.claude/launch.json
+/storage/tmp/
