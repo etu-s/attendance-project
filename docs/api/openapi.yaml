@@ -1,0 +1,511 @@
+openapi: 3.1.0
+info:
+  title: AMS API
+  version: 0.1.0
+  description: |
+    Multi-tenant Attendance Management System. JSON only, versioned under `/api/v1`.
+
+    **Hosts.** Central (super admin) endpoints live under `/api/v1/central` and only answer on
+    central hosts (`localhost` in dev). Tenant endpoints live under `/api/v1` and only answer on a
+    tenant subdomain (`<subdomain>.localhost` in dev); the subdomain selects the tenant.
+
+    **Auth.** The SPA uses Sanctum cookie sessions: `GET /sanctum/csrf-cookie` first, then send the
+    `X-XSRF-TOKEN` header (value of the `XSRF-TOKEN` cookie) on every mutating request. Requests must
+    come from a stateful origin (`SANCTUM_STATEFUL_DOMAINS`). Bearer tokens are reserved for devices
+    and integrations (Punch Ingestion module).
+
+    **Lists** accept `page`, `per_page` (max 100), `sort` (prefix `-` for descending) and `search`,
+    plus per-endpoint filters, and return Laravel's paginated envelope (`data`, `links`, `meta`).
+
+    **Errors.** `401` unauthenticated, `403` forbidden (or a suspended workspace), `404` unknown
+    record or workspace, `409` business-rule conflict, `419` CSRF token mismatch, `422` validation
+    (`errors` per field) or business rule (`rule`), `429` rate limited, `503` workspace provisioning.
+  # Keep in sync with app/Modules/*/routes and the Http/Resources classes.
+
+servers:
+  - url: http://{subdomain}.localhost:5173
+    description: Tenant workspace (dev, via the Vite proxy)
+    variables:
+      subdomain: { default: acme }
+  - url: http://localhost:5173
+    description: Central console (dev, via the Vite proxy)
+
+tags:
+  - name: Central auth
+  - name: Plans
+  - name: Tenants
+  - name: Tenant auth
+  - name: Users
+  - name: Settings
+  - name: Audit log
+  - name: Health
+
+paths:
+  /sanctum/csrf-cookie:
+    get:
+      summary: Issue the XSRF-TOKEN cookie
+      tags: [Central auth, Tenant auth]
+      security: []
+      responses:
+        '204': { description: Cookie set }
+
+  # ---------------------------------------------------------------- central
+  /api/v1/central/auth/login:
+    post:
+      tags: [Central auth]
+      summary: Super admin login (starts a session on the `central` guard)
+      security: []
+      requestBody: { $ref: '#/components/requestBodies/Login' }
+      responses:
+        '200': { description: Signed in, content: { application/json: { schema: { $ref: '#/components/schemas/SuperAdminEnvelope' } } } }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+  /api/v1/central/auth/logout:
+    post:
+      tags: [Central auth]
+      summary: End the super admin session
+      responses: { '204': { description: Signed out }, '401': { $ref: '#/components/responses/Unauthenticated' } }
+  /api/v1/central/auth/me:
+    get:
+      tags: [Central auth]
+      summary: Current super admin
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/SuperAdminEnvelope' } } } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+  /api/v1/central/plans:
+    get:
+      tags: [Plans]
+      summary: List plans
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PerPage'
+        - $ref: '#/components/parameters/Search'
+        - { name: sort, in: query, schema: { type: string, enum: [name, -name, created_at, -created_at, max_employees, -max_employees], default: name } }
+        - { name: is_active, in: query, schema: { type: boolean } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/PlanPage' } } } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+    post:
+      tags: [Plans]
+      summary: Create a plan
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/PlanInput' } } } }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/PlanEnvelope' } } } }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v1/central/plans/{plan}:
+    parameters: [{ name: plan, in: path, required: true, schema: { type: integer } }]
+    get:
+      tags: [Plans]
+      summary: Show a plan
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/PlanEnvelope' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [Plans]
+      summary: Update a plan (partial)
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/PlanInput' } } } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/PlanEnvelope' } } } }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    delete:
+      tags: [Plans]
+      summary: Delete an unused plan
+      responses:
+        '204': { description: Deleted }
+        '409': { description: 'Plan is assigned to tenants (`rule: plan_in_use`)', content: { application/json: { schema: { $ref: '#/components/schemas/BusinessRuleError' } } } }
+
+  /api/v1/central/tenants:
+    get:
+      tags: [Tenants]
+      summary: List tenants
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PerPage'
+        - { name: search, in: query, description: Name or subdomain, schema: { type: string, maxLength: 100 } }
+        - { name: sort, in: query, schema: { type: string, enum: [name, -name, status, -status, created_at, -created_at], default: -created_at } }
+        - { name: status, in: query, schema: { $ref: '#/components/schemas/TenantStatus' } }
+        - { name: plan_id, in: query, schema: { type: integer } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/TenantPage' } } } }
+    post:
+      tags: [Tenants]
+      summary: Provision a tenant (database file, migrations, defaults, first Tenant Admin)
+      description: Synchronous. On any failure the tenant row, domain and database file are removed.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, subdomain, plan_id, timezone, admin_name, admin_email, admin_password, admin_password_confirmation]
+              properties:
+                name: { type: string, maxLength: 120 }
+                subdomain: { type: string, pattern: '^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])$', description: 'Lowercased; reserved names rejected; immutable' }
+                plan_id: { type: integer, description: Must be an active plan }
+                timezone: { type: string, example: Asia/Karachi }
+                admin_name: { type: string, maxLength: 120 }
+                admin_email: { type: string, format: email }
+                admin_password: { type: string, minLength: 8, description: Letters and numbers }
+                admin_password_confirmation: { type: string }
+      responses:
+        '201': { description: Provisioned, content: { application/json: { schema: { $ref: '#/components/schemas/TenantEnvelope' } } } }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v1/central/tenants/{tenant}:
+    parameters: [{ name: tenant, in: path, required: true, schema: { type: string, format: uuid } }]
+    get:
+      tags: [Tenants]
+      summary: Show a tenant
+      responses: { '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/TenantEnvelope' } } } } }
+    put:
+      tags: [Tenants]
+      summary: Update name or plan (the subdomain cannot change)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: { name: { type: string, maxLength: 120 }, plan_id: { type: integer } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/TenantEnvelope' } } } }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    delete:
+      tags: [Tenants]
+      summary: Permanently delete a suspended tenant (a VACUUM INTO backup is taken first)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [confirm], properties: { confirm: { type: string, description: The tenant subdomain, typed to confirm } } }
+      responses:
+        '204': { description: Deleted }
+        '409': { description: 'Tenant is not suspended (`rule: tenant_not_suspended`)', content: { application/json: { schema: { $ref: '#/components/schemas/BusinessRuleError' } } } }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v1/central/tenants/{tenant}/suspend:
+    parameters: [{ name: tenant, in: path, required: true, schema: { type: string, format: uuid } }]
+    post:
+      tags: [Tenants]
+      summary: Suspend an active tenant (its routes answer 403)
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/TenantEnvelope' } } } }
+        '409': { description: Tenant is not active, content: { application/json: { schema: { $ref: '#/components/schemas/BusinessRuleError' } } } }
+  /api/v1/central/tenants/{tenant}/activate:
+    parameters: [{ name: tenant, in: path, required: true, schema: { type: string, format: uuid } }]
+    post:
+      tags: [Tenants]
+      summary: Reactivate a suspended tenant
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/TenantEnvelope' } } } }
+        '409': { description: Tenant is not suspended, content: { application/json: { schema: { $ref: '#/components/schemas/BusinessRuleError' } } } }
+
+  # ---------------------------------------------------------------- tenant
+  /api/v1/health:
+    get:
+      tags: [Health]
+      summary: Tenant database liveness (public)
+      security: []
+      responses:
+        '200': { description: Healthy, content: { application/json: { schema: { type: object, properties: { status: { const: ok }, database: { const: ok } } } } } }
+        '403': { $ref: '#/components/responses/WorkspaceSuspended' }
+        '404': { $ref: '#/components/responses/WorkspaceNotFound' }
+        '503': { description: Database unavailable or workspace still provisioning }
+
+  /api/v1/auth/login:
+    post:
+      tags: [Tenant auth]
+      summary: Tenant user login (case-insensitive email; deactivated users are refused)
+      security: []
+      requestBody: { $ref: '#/components/requestBodies/Login' }
+      responses:
+        '200': { description: Signed in, content: { application/json: { schema: { $ref: '#/components/schemas/SessionEnvelope' } } } }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+  /api/v1/auth/logout:
+    post:
+      tags: [Tenant auth]
+      summary: End the session
+      responses: { '204': { description: Signed out } }
+  /api/v1/auth/me:
+    get:
+      tags: [Tenant auth]
+      summary: Current user, permissions and workspace display preferences
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/SessionEnvelope' } } } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+  /api/v1/users:
+    get:
+      tags: [Users]
+      summary: List users (permission users.view)
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PerPage'
+        - { name: search, in: query, description: Name or email, schema: { type: string, maxLength: 100 } }
+        - { name: sort, in: query, schema: { type: string, enum: [name, -name, email, -email, status, -status, created_at, -created_at, last_login_at, -last_login_at], default: name } }
+        - { name: role, in: query, schema: { $ref: '#/components/schemas/Role' } }
+        - { name: status, in: query, schema: { $ref: '#/components/schemas/UserStatus' } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/UserPage' } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [Users]
+      summary: Create a user (users.create; only a Tenant Admin may assign tenant-admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password, role]
+              properties:
+                name: { type: string, maxLength: 120 }
+                email: { type: string, format: email, description: Unique per tenant, including deleted users }
+                password: { type: string, minLength: 8, description: Letters and numbers }
+                role: { $ref: '#/components/schemas/Role' }
+                status: { $ref: '#/components/schemas/UserStatus' }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/UserEnvelope' } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v1/users/{user}:
+    parameters: [{ name: user, in: path, required: true, schema: { type: integer } }]
+    get:
+      tags: [Users]
+      summary: Show a user
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/UserEnvelope' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [Users]
+      summary: Update a user (partial; empty password keeps the current one)
+      description: |
+        Rules: a Tenant Admin account can only be edited by a Tenant Admin; nobody can change their own
+        role or status (`rule: self_modification`, 403); the last active Tenant Admin cannot be demoted or
+        deactivated (`rule: last_tenant_admin`, 409).
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string, maxLength: 120 }
+                email: { type: string, format: email }
+                password: { type: [string, 'null'], minLength: 8 }
+                role: { $ref: '#/components/schemas/Role' }
+                status: { $ref: '#/components/schemas/UserStatus' }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/UserEnvelope' } } } }
+        '403': { description: Forbidden or self-modification, content: { application/json: { schema: { $ref: '#/components/schemas/BusinessRuleError' } } } }
+        '409': { description: Last active Tenant Admin, content: { application/json: { schema: { $ref: '#/components/schemas/BusinessRuleError' } } } }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    delete:
+      tags: [Users]
+      summary: Soft-delete a user and revoke their API tokens (users.delete; not yourself)
+      responses:
+        '204': { description: Deleted }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { description: Last active Tenant Admin, content: { application/json: { schema: { $ref: '#/components/schemas/BusinessRuleError' } } } }
+
+  /api/v1/settings:
+    get:
+      tags: [Settings]
+      summary: All settings with definitions and current values (settings.view)
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: object, properties: { data: { type: array, items: { $ref: '#/components/schemas/Setting' } } } } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    put:
+      tags: [Settings]
+      summary: Update settings (settings.update)
+      description: A list of key/value pairs, because keys contain dots. Errors are reported as `settings.<index>.value`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [settings]
+              properties:
+                settings:
+                  type: array
+                  minItems: 1
+                  items: { type: object, required: [key, value], properties: { key: { type: string, example: general.timezone }, value: {} } }
+      responses:
+        '200': { description: Updated list, content: { application/json: { schema: { type: object, properties: { data: { type: array, items: { $ref: '#/components/schemas/Setting' } } } } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /api/v1/audit-logs:
+    get:
+      tags: [Audit log]
+      summary: Append-only change history (audit-logs.view)
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PerPage'
+        - { name: sort, in: query, schema: { type: string, enum: [created_at, -created_at], default: -created_at } }
+        - { name: action, in: query, schema: { type: string, enum: [created, updated, deleted, restored, role_changed] } }
+        - { name: actor_type, in: query, schema: { type: string, enum: [user, super_admin, system] } }
+        - { name: actor_id, in: query, schema: { type: integer } }
+        - { name: subject_type, in: query, schema: { type: string, example: user } }
+        - { name: subject_id, in: query, schema: { type: string } }
+        - { name: from, in: query, description: Inclusive calendar day in the workspace timezone, schema: { type: string, format: date } }
+        - { name: to, in: query, description: Inclusive calendar day in the workspace timezone, schema: { type: string, format: date } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/AuditLogPage' } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+components:
+  parameters:
+    Page: { name: page, in: query, schema: { type: integer, minimum: 1 } }
+    PerPage: { name: per_page, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 15 } }
+    Search: { name: search, in: query, schema: { type: string, maxLength: 100 } }
+
+  requestBodies:
+    Login:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [email, password]
+            properties:
+              email: { type: string, format: email }
+              password: { type: string }
+              remember: { type: boolean }
+
+  responses:
+    Unauthenticated: { description: Not signed in, content: { application/json: { schema: { $ref: '#/components/schemas/Message' } } } }
+    Forbidden: { description: Missing permission, content: { application/json: { schema: { $ref: '#/components/schemas/Message' } } } }
+    NotFound: { description: Not found, content: { application/json: { schema: { $ref: '#/components/schemas/Message' } } } }
+    WorkspaceNotFound: { description: 'Unknown subdomain (`{"message":"Workspace not found."}`)', content: { application/json: { schema: { $ref: '#/components/schemas/Message' } } } }
+    WorkspaceSuspended: { description: Workspace suspended, content: { application/json: { schema: { $ref: '#/components/schemas/Message' } } } }
+    TooManyRequests: { description: Rate limited (login 5/min per host+email+IP by default) }
+    ValidationError:
+      description: Validation failed
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message: { type: string }
+              errors: { type: object, additionalProperties: { type: array, items: { type: string } } }
+
+  schemas:
+    Message: { type: object, properties: { message: { type: string } } }
+    BusinessRuleError:
+      type: object
+      properties:
+        message: { type: string }
+        rule: { type: string, enum: [plan_in_use, tenant_not_active, tenant_not_suspended, self_modification, self_deletion, admin_role_restricted, last_tenant_admin] }
+    PaginationMeta:
+      type: object
+      properties:
+        current_page: { type: integer }
+        last_page: { type: integer }
+        per_page: { type: integer }
+        total: { type: integer }
+        from: { type: [integer, 'null'] }
+        to: { type: [integer, 'null'] }
+    Role: { type: string, enum: [tenant-admin, hr-manager, department-manager, employee] }
+    UserStatus: { type: string, enum: [active, inactive] }
+    TenantStatus: { type: string, enum: [provisioning, active, suspended] }
+
+    SuperAdmin:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        email: { type: string }
+        role: { const: super-admin }
+        last_login_at: { type: [string, 'null'], format: date-time }
+    SuperAdminEnvelope: { type: object, properties: { data: { $ref: '#/components/schemas/SuperAdmin' } } }
+
+    Plan:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        slug: { type: string }
+        max_employees: { type: [integer, 'null'], description: null = unlimited }
+        features: { type: array, items: { type: string } }
+        is_active: { type: boolean }
+        tenants_count: { type: integer }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    PlanInput:
+      type: object
+      required: [name, slug, max_employees]
+      properties:
+        name: { type: string, maxLength: 100 }
+        slug: { type: string, pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$', maxLength: 60 }
+        max_employees: { type: [integer, 'null'], minimum: 1 }
+        features: { type: array, maxItems: 50, items: { type: string, maxLength: 50 } }
+        is_active: { type: boolean, default: true }
+    PlanEnvelope: { type: object, properties: { data: { $ref: '#/components/schemas/Plan' } } }
+    PlanPage: { type: object, properties: { data: { type: array, items: { $ref: '#/components/schemas/Plan' } }, meta: { $ref: '#/components/schemas/PaginationMeta' } } }
+
+    Tenant:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        subdomain: { type: string }
+        status: { $ref: '#/components/schemas/TenantStatus' }
+        plan: { type: object, properties: { id: { type: integer }, name: { type: string } } }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    TenantEnvelope: { type: object, properties: { data: { $ref: '#/components/schemas/Tenant' } } }
+    TenantPage: { type: object, properties: { data: { type: array, items: { $ref: '#/components/schemas/Tenant' } }, meta: { $ref: '#/components/schemas/PaginationMeta' } } }
+
+    User:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        email: { type: string }
+        status: { $ref: '#/components/schemas/UserStatus' }
+        role: { oneOf: [{ $ref: '#/components/schemas/Role' }, { type: 'null' }] }
+        last_login_at: { type: [string, 'null'], format: date-time }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    UserEnvelope: { type: object, properties: { data: { $ref: '#/components/schemas/User' } } }
+    UserPage: { type: object, properties: { data: { type: array, items: { $ref: '#/components/schemas/User' } }, meta: { $ref: '#/components/schemas/PaginationMeta' } } }
+
+    Session:
+      type: object
+      properties:
+        user: { $ref: '#/components/schemas/User' }
+        permissions: { type: array, items: { type: string }, example: [audit-logs.view, settings.view, users.view] }
+        workspace:
+          type: object
+          properties:
+            name: { type: string }
+            timezone: { type: string }
+            date_format: { type: string }
+            time_format: { type: string }
+            week_start: { type: integer, minimum: 0, maximum: 6 }
+    SessionEnvelope: { type: object, properties: { data: { $ref: '#/components/schemas/Session' } } }
+
+    Setting:
+      type: object
+      properties:
+        key: { type: string, example: general.timezone }
+        group: { type: string, example: general }
+        type: { type: string, enum: [string, integer, boolean] }
+        label: { type: string }
+        description: { type: [string, 'null'] }
+        options: { type: [array, 'null'], items: { type: [string, integer] } }
+        default: { type: [string, integer, boolean] }
+        value: { type: [string, integer, boolean, 'null'] }
+
+    AuditLog:
+      type: object
+      properties:
+        id: { type: integer }
+        action: { type: string, enum: [created, updated, deleted, restored, role_changed] }
+        actor: { type: object, properties: { type: { type: string, enum: [user, super_admin, system] }, id: { type: [integer, 'null'] }, name: { type: [string, 'null'] } } }
+        subject: { type: object, properties: { type: { type: string }, id: { type: string } } }
+        before: { type: [object, 'null'], description: Changed attributes before; secrets appear as "[redacted]" }
+        after: { type: [object, 'null'] }
+        ip_address: { type: [string, 'null'] }
+        created_at: { type: string, format: date-time }
+    AuditLogPage: { type: object, properties: { data: { type: array, items: { $ref: '#/components/schemas/AuditLog' } }, meta: { $ref: '#/components/schemas/PaginationMeta' } } }
