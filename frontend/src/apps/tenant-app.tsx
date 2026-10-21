@@ -1,8 +1,12 @@
 import { useMemo } from 'react'
 import {
   Building,
+  CalendarClock,
+  CalendarDays,
+  CalendarHeart,
   CalendarSync,
   Clock,
+  LayoutGrid,
   Contact,
   Home,
   Loader2,
@@ -27,6 +31,10 @@ import { DepartmentsPage } from '@/features/organization/departments-page'
 import { GroupsPage } from '@/features/organization/groups-page'
 import { LocationsPage } from '@/features/organization/locations-page'
 import { OrganizationPage } from '@/features/organization/organization-page'
+import { HolidaysPage } from '@/features/scheduling/holidays-page'
+import { MySchedulePage } from '@/features/scheduling/my-schedule-page'
+import { RosterPage } from '@/features/scheduling/roster-page'
+import { SchedulesPage } from '@/features/scheduling/schedules-page'
 import { SettingsPage } from '@/features/settings/settings-page'
 import { ShiftDetailPage } from '@/features/timetables/shift-detail-page'
 import { ShiftsPage } from '@/features/timetables/shifts-page'
@@ -119,6 +127,7 @@ function TenantLayout() {
   const items: (NavItem & { visible: boolean })[] = [
     { to: '/', label: 'Home', icon: Home, end: true, visible: true },
     { to: '/me', label: 'My profile', icon: UserRound, visible: true },
+    { to: '/my-schedule', label: 'My schedule', icon: CalendarClock, visible: true },
     { to: '/employees', label: 'Employees', icon: Contact, visible: can('employees.view') || can('employees.view-all') },
     { to: '/departments', label: 'Departments', icon: Network, visible: can('departments.view') },
     { to: '/groups', label: 'Groups', icon: UsersRound, visible: can('groups.view') },
@@ -126,6 +135,9 @@ function TenantLayout() {
     { to: '/organization', label: 'Organization', icon: Building, visible: can('organization.view') },
     { to: '/timetables', label: 'Timetables', icon: Clock, visible: can('timetables.view') },
     { to: '/shifts', label: 'Shifts', icon: CalendarSync, visible: can('shifts.view') },
+    { to: '/schedules', label: 'Schedules', icon: CalendarDays, visible: can('schedules.view') },
+    { to: '/roster', label: 'Roster', icon: LayoutGrid, visible: can('schedules.view') },
+    { to: '/holidays', label: 'Holidays', icon: CalendarHeart, visible: can('holidays.view') },
     { to: '/users', label: 'Users', icon: Users, visible: can('users.view') },
     { to: '/settings', label: 'Settings', icon: Settings, visible: can('settings.view') },
     { to: '/audit-log', label: 'Audit log', icon: ScrollText, visible: can('audit-logs.view') },
@@ -159,6 +171,12 @@ export function TenantApp({ subdomain }: { subdomain: string }) {
                   children: [
                     { index: true, element: <HomePage /> },
                     { path: '/me', element: <MyProfilePage /> },
+                    { path: '/my-schedule', element: <MySchedulePage /> },
+                    guarded('schedules.view', [
+                      { path: '/schedules', element: <SchedulesPage /> },
+                      { path: '/roster', element: <RosterPage /> },
+                    ]),
+                    guarded('holidays.view', [{ path: '/holidays', element: <HolidaysPage /> }]),
                     guarded(
                       ['employees.view', 'employees.view-all'],
                       [

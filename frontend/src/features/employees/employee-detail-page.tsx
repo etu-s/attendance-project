@@ -17,6 +17,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { EmployeeScheduleTab } from '@/features/scheduling/employee-schedule-tab'
 import { useCan, useDisplayPreferences } from '@/features/tenant-auth/hooks'
 import { formatLocalDate, type DisplayPreferences } from '@/lib/format'
 import { errorMessage } from '@/lib/forms'
@@ -264,6 +265,7 @@ export function EmployeeDetailPage() {
           <TabsTrigger value="details">Details</TabsTrigger>
           <TabsTrigger value="history">History</TabsTrigger>
           <TabsTrigger value="groups">Groups</TabsTrigger>
+          {can('schedules.view') && <TabsTrigger value="schedule">Schedule</TabsTrigger>}
         </TabsList>
         <TabsContent value="details" className="pt-4">
           <Card>
@@ -284,6 +286,11 @@ export function EmployeeDetailPage() {
             onRemove={setLeaving}
           />
         </TabsContent>
+        {can('schedules.view') && (
+          <TabsContent value="schedule" className="pt-4">
+            <EmployeeScheduleTab employeeId={employee.id} />
+          </TabsContent>
+        )}
       </Tabs>
 
       <EmployeeActionDialog employee={employee} action={action} onClose={() => setAction(null)} />
