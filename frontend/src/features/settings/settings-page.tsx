@@ -18,8 +18,8 @@ import { useSettings, useUpdateSettings, type Setting, type SettingValue } from 
 
 const groupTitles: Record<string, { title: string; description: string }> = {
   attendance: {
-    title: 'Attendance defaults',
-    description: 'Grace minutes and punch windows for timetables that do not set their own.',
+    title: 'Attendance',
+    description: 'How punches become attendance. Grace minutes and punch windows apply to timetables that do not set their own.',
   },
   general: {
     title: 'General',

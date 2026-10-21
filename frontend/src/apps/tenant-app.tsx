@@ -1,17 +1,24 @@
 import { useMemo } from 'react'
 import {
+  Activity,
   Building,
+  CalendarCheck,
   CalendarClock,
   CalendarDays,
   CalendarHeart,
   CalendarSync,
+  ClipboardList,
   Clock,
   LayoutGrid,
   Contact,
+  Fingerprint,
   Home,
   Loader2,
   MapPin,
   Network,
+  PencilLine,
+  RadioTower,
+  ScanSearch,
   ScrollText,
   Settings,
   UserRound,
@@ -22,6 +29,13 @@ import { createBrowserRouter, Navigate, Outlet, RouterProvider, type RouteObject
 import { AppShell, type NavItem } from '@/components/app-shell'
 import { FullPageMessage } from '@/components/states'
 import { Button } from '@/components/ui/button'
+import { AttendancePage } from '@/features/attendance/attendance-page'
+import { CorrectionsPage } from '@/features/attendance/corrections-page'
+import { MyAttendancePage } from '@/features/attendance/my-attendance-page'
+import { OrphanPunchesPage } from '@/features/attendance/orphan-punches-page'
+import { PunchSourcesPage } from '@/features/attendance/punch-sources-page'
+import { RawPunchesPage } from '@/features/attendance/raw-punches-page'
+import { TodayPage } from '@/features/attendance/today-page'
 import { AuditLogPage } from '@/features/audit-logs/audit-log-page'
 import { EmployeeDetailPage } from '@/features/employees/employee-detail-page'
 import { EmployeesPage } from '@/features/employees/employees-page'
@@ -124,23 +138,49 @@ function TenantLayout() {
   const can = useCan()
   const logout = useLogout()
 
+  const corrections = can('corrections.request') || can('corrections.approve')
   const items: (NavItem & { visible: boolean })[] = [
     { to: '/', label: 'Home', icon: Home, end: true, visible: true },
     { to: '/me', label: 'My profile', icon: UserRound, visible: true },
+    { to: '/my-attendance', label: 'My attendance', icon: CalendarCheck, visible: true },
     { to: '/my-schedule', label: 'My schedule', icon: CalendarClock, visible: true },
-    { to: '/employees', label: 'Employees', icon: Contact, visible: can('employees.view') || can('employees.view-all') },
-    { to: '/departments', label: 'Departments', icon: Network, visible: can('departments.view') },
-    { to: '/groups', label: 'Groups', icon: UsersRound, visible: can('groups.view') },
-    { to: '/locations', label: 'Locations', icon: MapPin, visible: can('locations.view') },
-    { to: '/organization', label: 'Organization', icon: Building, visible: can('organization.view') },
-    { to: '/timetables', label: 'Timetables', icon: Clock, visible: can('timetables.view') },
-    { to: '/shifts', label: 'Shifts', icon: CalendarSync, visible: can('shifts.view') },
-    { to: '/schedules', label: 'Schedules', icon: CalendarDays, visible: can('schedules.view') },
-    { to: '/roster', label: 'Roster', icon: LayoutGrid, visible: can('schedules.view') },
-    { to: '/holidays', label: 'Holidays', icon: CalendarHeart, visible: can('holidays.view') },
-    { to: '/users', label: 'Users', icon: Users, visible: can('users.view') },
-    { to: '/settings', label: 'Settings', icon: Settings, visible: can('settings.view') },
-    { to: '/audit-log', label: 'Audit log', icon: ScrollText, visible: can('audit-logs.view') },
+    { to: '/today', label: 'Today', icon: Activity, section: 'Attendance', visible: can('attendance.view') },
+    { to: '/attendance', label: 'Attendance', icon: ClipboardList, section: 'Attendance', visible: can('attendance.view') },
+    { to: '/corrections', label: 'Corrections', icon: PencilLine, section: 'Attendance', visible: corrections },
+    { to: '/punch-log', label: 'Punch log', icon: Fingerprint, section: 'Attendance', visible: can('punches.view') },
+    {
+      to: '/unmatched-punches',
+      label: 'Unmatched punches',
+      icon: ScanSearch,
+      section: 'Attendance',
+      visible: can('punches.view'),
+    },
+    {
+      to: '/punch-sources',
+      label: 'Punch sources',
+      icon: RadioTower,
+      section: 'Attendance',
+      visible: can('punch-sources.manage'),
+    },
+    { to: '/schedules', label: 'Schedules', icon: CalendarDays, section: 'Scheduling', visible: can('schedules.view') },
+    { to: '/roster', label: 'Roster', icon: LayoutGrid, section: 'Scheduling', visible: can('schedules.view') },
+    { to: '/holidays', label: 'Holidays', icon: CalendarHeart, section: 'Scheduling', visible: can('holidays.view') },
+    { to: '/timetables', label: 'Timetables', icon: Clock, section: 'Scheduling', visible: can('timetables.view') },
+    { to: '/shifts', label: 'Shifts', icon: CalendarSync, section: 'Scheduling', visible: can('shifts.view') },
+    {
+      to: '/employees',
+      label: 'Employees',
+      icon: Contact,
+      section: 'Organization',
+      visible: can('employees.view') || can('employees.view-all'),
+    },
+    { to: '/departments', label: 'Departments', icon: Network, section: 'Organization', visible: can('departments.view') },
+    { to: '/groups', label: 'Groups', icon: UsersRound, section: 'Organization', visible: can('groups.view') },
+    { to: '/locations', label: 'Locations', icon: MapPin, section: 'Organization', visible: can('locations.view') },
+    { to: '/organization', label: 'Organization', icon: Building, section: 'Organization', visible: can('organization.view') },
+    { to: '/users', label: 'Users', icon: Users, section: 'Administration', visible: can('users.view') },
+    { to: '/settings', label: 'Settings', icon: Settings, section: 'Administration', visible: can('settings.view') },
+    { to: '/audit-log', label: 'Audit log', icon: ScrollText, section: 'Administration', visible: can('audit-logs.view') },
   ]
 
   return (
@@ -172,6 +212,20 @@ export function TenantApp({ subdomain }: { subdomain: string }) {
                     { index: true, element: <HomePage /> },
                     { path: '/me', element: <MyProfilePage /> },
                     { path: '/my-schedule', element: <MySchedulePage /> },
+                    { path: '/my-attendance', element: <MyAttendancePage /> },
+                    guarded('attendance.view', [
+                      { path: '/today', element: <TodayPage /> },
+                      { path: '/attendance', element: <AttendancePage /> },
+                    ]),
+                    guarded(
+                      ['corrections.request', 'corrections.approve'],
+                      [{ path: '/corrections', element: <CorrectionsPage /> }],
+                    ),
+                    guarded('punches.view', [
+                      { path: '/punch-log', element: <RawPunchesPage /> },
+                      { path: '/unmatched-punches', element: <OrphanPunchesPage /> },
+                    ]),
+                    guarded('punch-sources.manage', [{ path: '/punch-sources', element: <PunchSourcesPage /> }]),
                     guarded('schedules.view', [
                       { path: '/schedules', element: <SchedulesPage /> },
                       { path: '/roster', element: <RosterPage /> },

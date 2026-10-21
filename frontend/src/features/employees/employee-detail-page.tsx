@@ -17,6 +17,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { EmployeeAttendanceTab } from '@/features/attendance/employee-attendance-tab'
 import { EmployeeScheduleTab } from '@/features/scheduling/employee-schedule-tab'
 import { useCan, useDisplayPreferences } from '@/features/tenant-auth/hooks'
 import { formatLocalDate, type DisplayPreferences } from '@/lib/format'
@@ -266,6 +267,7 @@ export function EmployeeDetailPage() {
           <TabsTrigger value="history">History</TabsTrigger>
           <TabsTrigger value="groups">Groups</TabsTrigger>
           {can('schedules.view') && <TabsTrigger value="schedule">Schedule</TabsTrigger>}
+          {can('attendance.view') && <TabsTrigger value="attendance">Attendance</TabsTrigger>}
         </TabsList>
         <TabsContent value="details" className="pt-4">
           <Card>
@@ -289,6 +291,15 @@ export function EmployeeDetailPage() {
         {can('schedules.view') && (
           <TabsContent value="schedule" className="pt-4">
             <EmployeeScheduleTab employeeId={employee.id} />
+          </TabsContent>
+        )}
+        {can('attendance.view') && (
+          <TabsContent value="attendance" className="pt-4">
+            <EmployeeAttendanceTab
+              employeeId={employee.id}
+              employeeCode={employee.employee_code}
+              employeeName={employee.full_name}
+            />
           </TabsContent>
         )}
       </Tabs>

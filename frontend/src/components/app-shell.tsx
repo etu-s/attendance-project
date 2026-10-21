@@ -20,6 +20,8 @@ export interface NavItem {
   label: string
   icon: ComponentType<{ className?: string }>
   end?: boolean
+  /** Items with the same section are grouped under a small heading (in order of appearance). */
+  section?: string
 }
 
 interface AppShellProps {
@@ -41,25 +43,44 @@ function initials(name: string): string {
     .join('')
 }
 
-function Navigation({ nav, onNavigate }: { nav: NavItem[]; onNavigate?: () => void }) {
+function NavEntry({ item, onNavigate }: { item: NavItem; onNavigate?: () => void }) {
   return (
-    <nav aria-label="Main" className="grid gap-1">
-      {nav.map((item) => (
-        <NavLink
-          key={item.to}
-          to={item.to}
-          end={item.end}
-          onClick={onNavigate}
-          className={({ isActive }) =>
-            cn(
-              'text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-ring flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none',
-              isActive && 'bg-sidebar-accent text-sidebar-accent-foreground',
-            )
-          }
-        >
-          <item.icon className="size-4" />
-          {item.label}
-        </NavLink>
+    <NavLink
+      to={item.to}
+      end={item.end}
+      onClick={onNavigate}
+      className={({ isActive }) =>
+        cn(
+          'text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-ring flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none',
+          isActive && 'bg-sidebar-accent text-sidebar-accent-foreground',
+        )
+      }
+    >
+      <item.icon className="size-4" />
+      {item.label}
+    </NavLink>
+  )
+}
+
+function Navigation({ nav, onNavigate }: { nav: NavItem[]; onNavigate?: () => void }) {
+  const groups: { section?: string; items: NavItem[] }[] = []
+  for (const item of nav) {
+    const last = groups[groups.length - 1]
+    if (last && last.section === item.section) last.items.push(item)
+    else groups.push({ section: item.section, items: [item] })
+  }
+
+  return (
+    <nav aria-label="Main" className="grid gap-4">
+      {groups.map((group, index) => (
+        <div key={group.section ?? `group-${String(index)}`} className="grid gap-1">
+          {group.section && (
+            <p className="text-muted-foreground px-3 pb-1 text-xs font-medium tracking-wide uppercase">{group.section}</p>
+          )}
+          {group.items.map((item) => (
+            <NavEntry key={item.to} item={item} onNavigate={onNavigate} />
+          ))}
+        </div>
       ))}
     </nav>
   )
@@ -86,9 +107,9 @@ export function AppShell({ brand, subtitle, nav, user, onLogout, loggingOut, chi
         Skip to content
       </a>
 
-      <aside className="bg-sidebar hidden w-60 shrink-0 flex-col gap-6 border-r py-6 md:flex">
+      <aside className="bg-sidebar sticky top-0 hidden h-svh w-60 shrink-0 flex-col gap-6 border-r py-6 md:flex">
         <Brand brand={brand} subtitle={subtitle} />
-        <div className="px-3">
+        <div className="min-h-0 flex-1 overflow-y-auto px-3">
           <Navigation nav={nav} />
         </div>
       </aside>
@@ -101,7 +122,7 @@ export function AppShell({ brand, subtitle, nav, user, onLogout, loggingOut, chi
                 <Menu />
               </Button>
             </SheetTrigger>
-            <SheetContent side="left" className="bg-sidebar w-64 gap-6 p-4">
+            <SheetContent side="left" className="bg-sidebar w-64 gap-6 overflow-y-auto p-4">
               <SheetHeader className="p-0">
                 <SheetTitle className="sr-only">Navigation</SheetTitle>
                 <Brand brand={brand} subtitle={subtitle} />
