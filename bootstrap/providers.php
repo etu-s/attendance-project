@@ -1,5 +1,6 @@
 <?php
 
+use App\Modules\Attendance\AttendanceServiceProvider;
 use App\Modules\Central\CentralServiceProvider;
 use App\Modules\Core\CoreServiceProvider;
 use App\Modules\Identity\IdentityServiceProvider;
@@ -20,4 +21,5 @@ return [
     OrganizationServiceProvider::class,
     TimetableServiceProvider::class,
     SchedulingServiceProvider::class,
+    AttendanceServiceProvider::class,
 ];

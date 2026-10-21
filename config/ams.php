@@ -34,6 +34,8 @@ return [
     'rate_limits' => [
         'login_per_minute' => (int) env('LOGIN_RATE_LIMIT', 5),
         'api_per_minute' => (int) env('API_RATE_LIMIT', 120),
+        // Per punch source key on one tenant host (POST /punches, /punches/batch).
+        'punches_per_minute' => (int) env('PUNCH_RATE_LIMIT', 600),
     ],
 
 ];
