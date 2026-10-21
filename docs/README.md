@@ -3,8 +3,8 @@
 | #   | Module                              | Status                   | Doc                                       |
 | --- | ----------------------------------- | ------------------------ | ----------------------------------------- |
 | 1   | Foundation                          | Approved (2026-10-20)    | [modules/foundation.md](modules/foundation.md) |
-| 2   | Organization & Employees            | Planning                 |                                           |
-| 3   | Timetable & Shifts                  | Not started              |                                           |
+| 2   | Organization & Employees            | Approved (2026-10-21)    | [modules/organization.md](modules/organization.md) |
+| 3   | Timetable & Shifts                  | Planning                 |                                           |
 | 4   | Scheduling                          | Not started              |                                           |
 | 5   | Punch Ingestion & Attendance Engine | Not started              |                                           |
 | 6   | Leave Management                    | Not started              |                                           |

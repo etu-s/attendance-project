@@ -4,6 +4,24 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ## [Unreleased]
 
+### Added — Module 2: Organization & Employees
+
+- Organization module (`app/Modules/Organization`): organization profile, locations (with timezone
+  override), nested departments, cross-department groups with unique priority, department/group managers.
+- Employees with effective-dated department/location history and group memberships; transfer (incl.
+  backdated), terminate, rehire, hire-date correction, optional linked login.
+- `EmployeeVisibility`: managers see employees of their departments (incl. sub-departments) and groups.
+- Plan `max_employees` enforced on create, import and rehire.
+- Queued CSV employee import with row-level error report.
+- Core: `LocalDate` cast (`Y-m-d` storage), `TenantClock`, `TenantPlanLimits` contract; Identity:
+  `UserDeleted` event.
+- SPA: Employees list and profile, Departments tree, Groups, Locations, Organization, My profile, CSV import.
+- 63 new Pest tests (189 total); OpenAPI spec v0.2.0.
+
+### Fixed
+
+- Form fields placed side by side no longer shift when a neighbor shows a hint or error.
+
 ### Added — Module 1: Foundation
 
 - Laravel 13 API as a modular monolith (`app/Modules/{Core,Central,Identity}`) with a module loader for
