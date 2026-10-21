@@ -3,6 +3,7 @@
 Multi-tenant attendance platform: a Laravel API (one SQLite database per tenant) and a React SPA.
 
 - Project rules and module plan: [CLAUDE.md](CLAUDE.md)
+- Engineer onboarding (architecture, features, workflow): [docs/SYSTEM_GUIDE.md](docs/SYSTEM_GUIDE.md)
 - Module docs: [docs/modules](docs/modules) · API: [docs/api/openapi.yaml](docs/api/openapi.yaml) · [CHANGELOG.md](CHANGELOG.md)
 
 ## Requirements
