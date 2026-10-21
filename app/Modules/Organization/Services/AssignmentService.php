@@ -44,6 +44,25 @@ final class AssignmentService
     }
 
     /**
+     * Assignments (with location) of many employees overlapping a date range,
+     * in one query; for range calculations such as schedule resolution.
+     *
+     * @param  list<int>  $employeeIds
+     * @return \Illuminate\Support\Collection<int, Collection<int, EmployeeAssignment>> employee id => periods by start
+     */
+    public function forEmployees(array $employeeIds, CarbonImmutable $from, CarbonImmutable $to): \Illuminate\Support\Collection
+    {
+        return EmployeeAssignment::query()
+            ->with('location')
+            ->whereIn('employee_id', $employeeIds)
+            ->where('effective_from', '<=', $to->format(LocalDate::FORMAT))
+            ->where(fn (Builder $q) => $q->whereNull('effective_to')->orWhere('effective_to', '>=', $from->format(LocalDate::FORMAT)))
+            ->orderBy('effective_from')
+            ->get()
+            ->groupBy('employee_id');
+    }
+
+    /**
      * Opens an employee's first period (hire) or a new period after a gap (rehire).
      */
     public function start(Employee $employee, int $departmentId, ?int $locationId, CarbonImmutable $from): EmployeeAssignment

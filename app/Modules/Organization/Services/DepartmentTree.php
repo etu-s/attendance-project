@@ -60,6 +60,30 @@ final class DepartmentTree
     }
 
     /**
+     * Every department's chain from itself up to the root (nearest first), in
+     * one query; used for "inherit from the nearest ancestor" rules.
+     *
+     * @return array<int, list<int>>
+     */
+    public function ancestorChains(): array
+    {
+        $parents = $this->parentMap();
+        $chains = [];
+
+        foreach (array_keys($parents) as $id) {
+            $chain = [];
+            $current = $id;
+            while ($current !== null && ! in_array($current, $chain, true)) {
+                $chain[] = $current;
+                $current = $parents[$current] ?? null;
+            }
+            $chains[$id] = $chain;
+        }
+
+        return $chains;
+    }
+
+    /**
      * True when making $newParentId the parent of $departmentId would put the
      * department under itself (directly or through its descendants).
      */

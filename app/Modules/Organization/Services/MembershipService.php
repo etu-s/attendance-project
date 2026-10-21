@@ -45,6 +45,23 @@ final class MembershipService
         return $employee->memberships()->with('group')->orderByDesc('effective_from')->get();
     }
 
+    /**
+     * Memberships (with group) of many employees overlapping a date range, in one query.
+     *
+     * @param  list<int>  $employeeIds
+     * @return \Illuminate\Support\Collection<int, Collection<int, GroupMembership>> employee id => memberships
+     */
+    public function forEmployees(array $employeeIds, CarbonImmutable $from, CarbonImmutable $to): \Illuminate\Support\Collection
+    {
+        return GroupMembership::query()
+            ->with('group')
+            ->whereIn('employee_id', $employeeIds)
+            ->where('effective_from', '<=', $to->format(LocalDate::FORMAT))
+            ->where(fn (Builder $q) => $q->whereNull('effective_to')->orWhere('effective_to', '>=', $from->format(LocalDate::FORMAT)))
+            ->get()
+            ->groupBy('employee_id');
+    }
+
     public function add(Employee $employee, Group $group, CarbonImmutable $from): GroupMembership
     {
         if (! $group->is_active) {
