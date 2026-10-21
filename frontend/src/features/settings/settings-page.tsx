@@ -17,6 +17,10 @@ import { errorMessage } from '@/lib/forms'
 import { useSettings, useUpdateSettings, type Setting, type SettingValue } from './api'
 
 const groupTitles: Record<string, { title: string; description: string }> = {
+  attendance: {
+    title: 'Attendance defaults',
+    description: 'Grace minutes and punch windows for timetables that do not set their own.',
+  },
   general: {
     title: 'General',
     description: 'Regional settings used to show dates and to decide which day a punch belongs to.',

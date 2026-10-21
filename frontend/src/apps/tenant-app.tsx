@@ -1,6 +1,8 @@
 import { useMemo } from 'react'
 import {
   Building,
+  CalendarSync,
+  Clock,
   Contact,
   Home,
   Loader2,
@@ -26,6 +28,9 @@ import { GroupsPage } from '@/features/organization/groups-page'
 import { LocationsPage } from '@/features/organization/locations-page'
 import { OrganizationPage } from '@/features/organization/organization-page'
 import { SettingsPage } from '@/features/settings/settings-page'
+import { ShiftDetailPage } from '@/features/timetables/shift-detail-page'
+import { ShiftsPage } from '@/features/timetables/shifts-page'
+import { TimetablesPage } from '@/features/timetables/timetables-page'
 import { useCan, useLogout, useSession, useSessionQuery } from '@/features/tenant-auth/hooks'
 import { TenantLoginPage } from '@/features/tenant-auth/tenant-login-page'
 import { UsersPage } from '@/features/users/users-page'
@@ -119,6 +124,8 @@ function TenantLayout() {
     { to: '/groups', label: 'Groups', icon: UsersRound, visible: can('groups.view') },
     { to: '/locations', label: 'Locations', icon: MapPin, visible: can('locations.view') },
     { to: '/organization', label: 'Organization', icon: Building, visible: can('organization.view') },
+    { to: '/timetables', label: 'Timetables', icon: Clock, visible: can('timetables.view') },
+    { to: '/shifts', label: 'Shifts', icon: CalendarSync, visible: can('shifts.view') },
     { to: '/users', label: 'Users', icon: Users, visible: can('users.view') },
     { to: '/settings', label: 'Settings', icon: Settings, visible: can('settings.view') },
     { to: '/audit-log', label: 'Audit log', icon: ScrollText, visible: can('audit-logs.view') },
@@ -163,6 +170,11 @@ export function TenantApp({ subdomain }: { subdomain: string }) {
                     guarded('groups.view', [{ path: '/groups', element: <GroupsPage /> }]),
                     guarded('locations.view', [{ path: '/locations', element: <LocationsPage /> }]),
                     guarded('organization.view', [{ path: '/organization', element: <OrganizationPage /> }]),
+                    guarded('timetables.view', [{ path: '/timetables', element: <TimetablesPage /> }]),
+                    guarded('shifts.view', [
+                      { path: '/shifts', element: <ShiftsPage /> },
+                      { path: '/shifts/:id', element: <ShiftDetailPage /> },
+                    ]),
                     guarded('users.view', [{ path: '/users', element: <UsersPage /> }]),
                     guarded('settings.view', [{ path: '/settings', element: <SettingsPage /> }]),
                     guarded('audit-logs.view', [{ path: '/audit-log', element: <AuditLogPage /> }]),
