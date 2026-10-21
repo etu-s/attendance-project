@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: AMS API
-  version: 0.3.0
+  version: 0.4.0
   description: |
     Multi-tenant Attendance Management System. JSON only, versioned under `/api/v1`.
 
@@ -42,6 +42,7 @@ tags:
   - name: Organization
   - name: Employees
   - name: Timetables
+  - name: Scheduling
 
 paths:
   /sanctum/csrf-cookie:
@@ -959,6 +960,160 @@ paths:
                   meta: { type: object, properties: { timezone: { type: string } } }
         '422': { $ref: '#/components/responses/ValidationError' }
 
+  # ---------------------------------------------------------------- scheduling (Module 4)
+  /api/v1/schedule-assignments:
+    get:
+      tags: [Scheduling]
+      summary: Dated shift assignments (schedules.view). Managers see employee-level rows of their own people only.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PerPage'
+        - { name: sort, in: query, schema: { type: string, enum: [effective_from, -effective_from, created_at, -created_at], default: -effective_from } }
+        - { name: target_type, in: query, schema: { type: string, enum: [organization, department, group, employee] } }
+        - { name: target_id, in: query, schema: { type: integer } }
+        - { name: shift_id, in: query, schema: { type: integer } }
+        - { name: active_on, in: query, schema: { type: string, format: date } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: object, properties: { data: { type: array, items: { $ref: '#/components/schemas/ScheduleAssignment' } }, meta: { $ref: '#/components/schemas/PaginationMeta' } } } } } }
+    post:
+      tags: [Scheduling]
+      summary: Assign a shift to a target from a date (schedules.manage)
+      description: |
+        With effective_to the new period overwrites that range (periods inside are removed, crossing ones
+        trimmed, a spanning one split). Without it the period runs until the next planned period (or the end
+        of the period it starts in). anchor_date (cycle start) defaults to effective_from. Fires ScheduleChanged.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [target_type, target_id, shift_id, effective_from]
+              properties:
+                target_type: { type: string, enum: [organization, department, group, employee] }
+                target_id: { type: [integer, 'null'], description: null for organization }
+                shift_id: { type: integer, description: Active shift }
+                effective_from: { type: string, format: date }
+                effective_to: { type: [string, 'null'], format: date }
+                anchor_date: { type: [string, 'null'], format: date }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/ScheduleAssignment' } } } } } }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v1/schedule-assignments/{schedule_assignment}:
+    parameters: [{ name: schedule_assignment, in: path, required: true, schema: { type: integer } }]
+    get: { tags: [Scheduling], summary: Show an assignment, responses: { '200': { description: OK } } }
+    put:
+      tags: [Scheduling]
+      summary: Change shift, anchor or end (not past the next period); backdated corrections allowed
+      requestBody:
+        content: { application/json: { schema: { type: object, properties: { shift_id: { type: integer }, anchor_date: { type: string, format: date }, effective_to: { type: [string, 'null'], format: date } } } } }
+      responses: { '200': { description: OK }, '422': { $ref: '#/components/responses/ValidationError' } }
+    delete:
+      tags: [Scheduling]
+      summary: Delete a period (the next level down applies)
+      responses: { '204': { description: Deleted } }
+
+  /api/v1/temporary-schedules:
+    get:
+      tags: [Scheduling]
+      summary: Temporary overrides across employees (schedules.view); managers see only their people's
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PerPage'
+        - { name: sort, in: query, schema: { type: string, enum: [date_from, -date_from, created_at, -created_at], default: -date_from } }
+        - { name: search, in: query, schema: { type: string }, description: Employee name or code }
+        - { name: employee_id, in: query, schema: { type: integer } }
+        - { name: active_on, in: query, schema: { type: string, format: date } }
+        - { name: kind, in: query, schema: { type: string, enum: [shift, day_off] } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: object, properties: { data: { type: array, items: { $ref: '#/components/schemas/TemporarySchedule' } }, meta: { $ref: '#/components/schemas/PaginationMeta' } } } } } }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v1/employees/{employee}/temporary-schedules:
+    parameters: [{ name: employee, in: path, required: true, schema: { type: integer } }]
+    get:
+      tags: [Scheduling]
+      summary: An employee's temporary overrides (schedules.view, visible employee)
+      responses: { '200': { description: OK, content: { application/json: { schema: { type: object, properties: { data: { type: array, items: { $ref: '#/components/schemas/TemporarySchedule' } } } } } } } }
+    post:
+      tags: [Scheduling]
+      summary: Override shift or give days off for a date range (schedules.manage). Ranges never overlap.
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/TemporaryScheduleInput' } } } }
+      responses: { '201': { description: Created }, '422': { $ref: '#/components/responses/ValidationError' } }
+  /api/v1/temporary-schedules/{temporarySchedule}:
+    parameters: [{ name: temporarySchedule, in: path, required: true, schema: { type: integer } }]
+    put:
+      tags: [Scheduling]
+      summary: Update an override (partial)
+      requestBody: { content: { application/json: { schema: { $ref: '#/components/schemas/TemporaryScheduleInput' } } } }
+      responses: { '200': { description: OK }, '422': { $ref: '#/components/responses/ValidationError' } }
+    delete: { tags: [Scheduling], summary: Remove an override, responses: { '204': { description: Deleted } } }
+
+  /api/v1/employees/{employee}/schedule:
+    parameters: [{ name: employee, in: path, required: true, schema: { type: integer } }]
+    get:
+      tags: [Scheduling]
+      summary: Resolved schedule for up to 62 days (schedules.view, visible employee)
+      parameters:
+        - { name: from, in: query, required: true, schema: { type: string, format: date } }
+        - { name: to, in: query, required: true, schema: { type: string, format: date } }
+      responses:
+        '200': { description: Every date in range, content: { application/json: { schema: { type: object, properties: { data: { type: array, items: { $ref: '#/components/schemas/ResolvedDay' } } } } } } }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v1/me/schedule:
+    get:
+      tags: [Scheduling]
+      summary: The signed-in employee's resolved schedule (404 if the login has no employee)
+      parameters:
+        - { name: from, in: query, required: true, schema: { type: string, format: date } }
+        - { name: to, in: query, required: true, schema: { type: string, format: date } }
+      responses: { '200': { description: OK }, '404': { description: Not linked } }
+  /api/v1/roster:
+    get:
+      tags: [Scheduling]
+      summary: Visible employees (paginated) × 1–31 days, resolved (schedules.view)
+      parameters:
+        - { name: from, in: query, required: true, schema: { type: string, format: date } }
+        - { name: days, in: query, schema: { type: integer, minimum: 1, maximum: 31, default: 7 } }
+        - { name: department_id, in: query, schema: { type: integer }, description: Includes sub-departments (current assignment) }
+        - { name: group_id, in: query, schema: { type: integer } }
+        - { name: search, in: query, schema: { type: string } }
+        - { name: page, in: query, schema: { type: integer } }
+        - { name: per_page, in: query, schema: { type: integer, maximum: 50, default: 25 } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  dates: { type: array, items: { type: string, format: date } }
+                  data: { type: array, items: { type: object, properties: { employee: { type: object }, days: { type: array, items: { $ref: '#/components/schemas/ResolvedDay' } } } } }
+                  meta: { $ref: '#/components/schemas/PaginationMeta' }
+
+  /api/v1/holidays:
+    get:
+      tags: [Scheduling]
+      summary: Holidays occurring in a year, recurring ones included (holidays.view)
+      parameters:
+        - { name: year, in: query, required: true, schema: { type: integer } }
+        - { name: location_id, in: query, schema: { type: integer }, description: Workspace-wide plus this location }
+      responses: { '200': { description: OK, content: { application/json: { schema: { type: object, properties: { data: { type: array, items: { $ref: '#/components/schemas/Holiday' } } } } } } } }
+    post:
+      tags: [Scheduling]
+      summary: Create a holiday (holidays.manage); one per date and scope
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/HolidayInput' } } } }
+      responses: { '201': { description: Created }, '422': { $ref: '#/components/responses/ValidationError' } }
+  /api/v1/holidays/{holiday}:
+    parameters: [{ name: holiday, in: path, required: true, schema: { type: integer } }]
+    get: { tags: [Scheduling], summary: Show a holiday, responses: { '200': { description: OK } } }
+    put:
+      tags: [Scheduling]
+      summary: Update a holiday (partial)
+      requestBody: { content: { application/json: { schema: { $ref: '#/components/schemas/HolidayInput' } } } }
+      responses: { '200': { description: OK }, '422': { $ref: '#/components/responses/ValidationError' } }
+    delete: { tags: [Scheduling], summary: Delete a holiday (all years if recurring), responses: { '204': { description: Deleted } } }
+
 components:
   parameters:
     Page: { name: page, in: query, schema: { type: integer, minimum: 1 } }
@@ -1311,3 +1466,70 @@ components:
         cycle_length: { type: integer, minimum: 1 }
         description: { type: [string, 'null'] }
         is_active: { type: boolean }
+
+    # ---------------------------------------------------------------- Module 4
+    ScheduleAssignment:
+      type: object
+      properties:
+        id: { type: integer }
+        target: { type: object, properties: { type: { type: string, enum: [organization, department, group, employee] }, id: { type: [integer, 'null'] }, name: { type: [string, 'null'], description: null when the target was deleted } } }
+        shift: { type: object, properties: { id: { type: integer }, name: { type: string }, code: { type: string }, cycle_unit: { type: string }, cycle_length: { type: integer } } }
+        anchor_date: { type: string, format: date, description: Cycle start }
+        effective_from: { type: string, format: date }
+        effective_to: { type: [string, 'null'], format: date }
+    TemporarySchedule:
+      type: object
+      properties:
+        id: { type: integer }
+        employee_id: { type: integer }
+        employee: { type: object, description: Only on GET /temporary-schedules, properties: { id: { type: integer }, employee_code: { type: string }, full_name: { type: string } } }
+        date_from: { type: string, format: date }
+        date_to: { type: string, format: date }
+        day_off: { type: boolean }
+        shift: { type: [object, 'null'] }
+        anchor_date: { type: [string, 'null'], format: date }
+        reason: { type: [string, 'null'] }
+    TemporaryScheduleInput:
+      type: object
+      properties:
+        date_from: { type: string, format: date }
+        date_to: { type: string, format: date, description: At most 366 days after date_from }
+        shift_id: { type: [integer, 'null'], description: null = day off }
+        anchor_date: { type: [string, 'null'], format: date }
+        reason: { type: [string, 'null'], maxLength: 255 }
+    Holiday:
+      type: object
+      properties:
+        id: { type: integer }
+        date: { type: string, format: date }
+        occurs_on: { type: string, format: date, description: Date in the requested year }
+        name: { type: string }
+        recurs_yearly: { type: boolean }
+        location: { type: [object, 'null'], description: null = everyone }
+    HolidayInput:
+      type: object
+      properties:
+        date: { type: string, format: date }
+        name: { type: string, maxLength: 120 }
+        location_id: { type: [integer, 'null'] }
+        recurs_yearly: { type: boolean }
+    ResolvedDay:
+      type: object
+      description: What an employee is scheduled to do on one work date, and which level decided it.
+      properties:
+        date: { type: string, format: date }
+        status: { type: string, enum: [working, rest, holiday, day_off, unscheduled, not_employed] }
+        source:
+          type: [object, 'null']
+          properties:
+            type: { type: string, enum: [temporary, employee, group, department, organization] }
+            id: { type: [integer, 'null'] }
+            name: { type: [string, 'null'] }
+            inherited_from: { type: [string, 'null'], description: Ancestor department whose schedule was inherited }
+        shift: { type: [object, 'null'] }
+        holiday: { type: [string, 'null'] }
+        timezone: { type: string, description: Location timezone on that date, else workspace }
+        periods:
+          type: array
+          description: Kept on holidays (for overtime rules); empty on rest days
+          items: { type: object, properties: { timetable: { type: object }, starts_at: { type: string, format: date-time }, ends_at: { type: string, format: date-time }, minutes: { type: integer } } }

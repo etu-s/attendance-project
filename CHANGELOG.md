@@ -4,6 +4,19 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ## [Unreleased]
 
+### Added — Module 4: Scheduling
+
+- Scheduling module (`app/Modules/Scheduling`): dated shift assignments for the organization default,
+  departments (inherited by sub-departments), groups (by priority) and employees; temporary overrides
+  (shift or days off); holidays (workspace or location, optionally yearly).
+- `ScheduleResolver`: the single source for "what is this employee scheduled to do on date D, and why",
+  date-accurate across transfers, location timezones, hire and termination; constant query count.
+- Backdated changes split history and fire `ScheduleChanged` (for Module 5 recalculation).
+- Shifts and timetables become read-only once a schedule using them has started.
+- Roster API and screen; Schedules (incl. a Temporary tab across employees), Holidays, employee Schedule tab
+  and My schedule screens.
+- 44 new Pest tests; OpenAPI spec v0.4.0.
+
 ### Added — Module 3: Timetable & Shifts
 
 - Timetable module (`app/Modules/Timetable`): fixed and flexible timetables (minutes from midnight,

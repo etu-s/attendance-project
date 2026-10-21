@@ -69,8 +69,8 @@ before the next starts (see [§18](#18-workflow-quality-gates-and-git)).
 | --- | ----------------------------------- | ------------------------------------------------ | ------------------------------------------------ |
 | 1   | Foundation                          | Approved 2026-10-20                              | [foundation.md](modules/foundation.md)           |
 | 2   | Organization & Employees            | Approved 2026-10-21                              | [organization.md](modules/organization.md)       |
-| 3   | Timetable & Shifts                  | Built, awaiting approval                         | `modules/timetable.md` (lands with the Module 3 commit) |
-| 4   | Scheduling                          | Not started                                      |                                                  |
+| 3   | Timetable & Shifts                  | Approved 2026-10-21                              | [timetable.md](modules/timetable.md)             |
+| 4   | Scheduling                          | Approved 2026-10-21                              | [scheduling.md](modules/scheduling.md)           |
 | 5   | Punch Ingestion & Attendance Engine | Not started                                      |                                                  |
 | 6   | Leave Management                    | Not started                                      |                                                  |
 | 7   | Overtime Management                 | Not started                                      |                                                  |
@@ -201,7 +201,7 @@ morph map, registers policies, permissions, settings and event listeners). See
 [TimetableServiceProvider.php](../app/Modules/Timetable/TimetableServiceProvider.php).
 
 Current provider order (`bootstrap/providers.php`): Tenancy, Horizon, Core, Central, Identity, Organization,
-Timetable. Keep new modules after the modules they depend on.
+Timetable, Scheduling. Keep new modules after the modules they depend on.
 
 ### 5.2 How modules talk to each other
 
@@ -221,6 +221,9 @@ Timetable. Keep new modules after the modules they depend on.
 | `ShiftCalendar::expand()`        | Timetable    | Lay a shift cycle onto real dates (UTC, DST-aware). Nobody else does cycle arithmetic |
 | `TimetableRules::for($timetable)`| Timetable    | Effective grace minutes and punch windows (timetable override or workspace default) |
 | `UsageRegistry::whenShiftInUse()` / `whenTimetableInUse()` | Timetable | Other modules (Scheduling) register "is this in use?" checkers so time rules lock once used |
+| `AssignmentService::forEmployees()` / `MembershipService::forEmployees()` / `DepartmentTree::ancestorChains()` | Organization | Range lookups for many employees at once (no N+1) |
+| `ScheduleResolver::forEmployee()` / `forEmployees()` | Scheduling | The **only** answer to "what is E scheduled to do on D, and why" (status, periods in UTC, timezone, deciding level) |
+| `ScheduleChanged`                | Scheduling event | Fired after commit for every assignment, temporary-schedule or holiday change (scope + date range); attendance recalculation listens |
 
 ### 5.3 Layering inside a module
 
@@ -513,9 +516,7 @@ rows. Each row in its own short transaction; errors reported by line.
 **Screens:** Employees list (filters, search, import wizard), Employee profile (Details / History / Groups),
 Departments tree, Groups, Locations, Organization, My profile (mobile-friendly).
 
-### 12.3 Module 3 — Timetable & Shifts (`Timetable`) — *built, awaiting approval*
-
-The module's code is not committed until it is approved; until then it exists only in the working tree.
+### 12.3 Module 3 — Timetable & Shifts (`Timetable`) — *approved 2026-10-21*
 
 Approved decisions (2026-10-21): weekly **and** N-day rotation cycles (anchor date set when scheduled in
 Module 4); split shifts up to **3 timetables per cycle day**, no overlaps (including overnight spill into the
@@ -537,7 +538,8 @@ must fit; a day outside the cycle or an inactive timetable is refused.
 
 **Locking:** `UsageRegistry` asks registered checkers whether a shift/timetable is in use. In use →
 cycle changes return `409 shift_locked`, time-rule changes on a timetable are refused, deletes return
-`409 shift_in_use` / `timetable_in_use`. Nothing registers a checker yet — **Module 4 must**.
+`409 shift_in_use` / `timetable_in_use`. Scheduling registers the checker: a shift is in use once a schedule
+using it has started.
 
 **Endpoints:** `timetables` (CRUD, `{id}/duplicate`) · `shifts` (CRUD, `{id}/duplicate`, `PUT {id}/days`,
 `GET {id}/preview?from&to[&anchor][&timezone]` — max 62 days, returns UTC periods per date with cycle index).
@@ -549,7 +551,33 @@ cycle changes return `409 shift_locked`, time-rule changes on a timetable are re
 (cycle editor + calendar preview). Settings page gains an "Attendance defaults" group. Demo data:
 `DemoTimetableSeeder` runs for the `acme` tenant.
 
-Full detail: `docs/modules/timetable.md`, committed together with the module once it is approved.
+Full detail: [modules/timetable.md](modules/timetable.md).
+
+### 12.4 Module 4 — Scheduling (`Scheduling`) — *approved 2026-10-21*
+
+Approved decisions (2026-10-21): temporary schedule = a shift (with anchor) or days off for a date range;
+sub-departments inherit the nearest ancestor's schedule; anchor defaults to the start date; shifts lock once a
+schedule using them has **started**; backdated changes split history and fire `ScheduleChanged`; holidays are
+workspace-wide or per location, optionally yearly; read-only roster (≤ 31 days); temporary beats holidays.
+
+**Precedence** (`ScheduleResolver`): temporary > employee > group (lowest priority among the employee's groups
+*on that date* that have a schedule) > department (on that date, else nearest ancestor) > organization default.
+Department, groups and location are read per date, so transfers switch schedule and timezone on the right day.
+Statuses: `working`, `rest`, `holiday` (periods kept for OT), `day_off`, `unscheduled`, `not_employed`.
+
+| Table                  | Notes |
+| ---------------------- | ----- |
+| `schedule_assignments` | `target_type` + `target_id` (null for organization; no FK), `shift_id` FK restrict, `anchor_date`, `effective_from`/`effective_to`; unique (target, from); no overlaps per target |
+| `temporary_schedules`  | `employee_id`, `date_from`/`date_to` (≤ 366 days), `shift_id` (null = day off), `anchor_date`, `reason`; no overlaps per employee |
+| `holidays`             | `date`, `name`, `location_id` (null = everyone), `recurs_yearly`; one per date + scope |
+
+**Endpoints:** `schedule-assignments` (CRUD) · `temporary-schedules` (list) · `employees/{id}/temporary-schedules`
+· `temporary-schedules/{id}` · `employees/{id}/schedule` · `me/schedule` · `roster` · `holidays` (CRUD).
+
+**Screens:** Schedules (Organization / Departments / Groups / Employees / Temporary tabs), Roster, Holidays,
+employee profile Schedule tab, My schedule. Demo data: `DemoSchedulingSeeder` (4 assignments, 7 holidays).
+
+Full detail: [modules/scheduling.md](modules/scheduling.md).
 
 ---
 
@@ -557,12 +585,6 @@ Full detail: `docs/modules/timetable.md`, committed together with the module onc
 
 These rules are fixed by CLAUDE.md and must be honoured when the modules are built. Each still gets its own
 plan and approval.
-
-**Module 4 — Scheduling.** Assign shifts (with a cycle anchor date) to department / group / employee, plus
-temporary employee schedules and a holiday calendar. **Schedule precedence**, implemented in a single,
-heavily tested service: *temporary employee schedule > employee schedule > group schedule (by group
-priority) > department schedule > organization default*. Resolve department/groups "on date D" via
-`AssignmentService` / `MembershipService`. Register usage checkers in `UsageRegistry`.
 
 **Module 5 — Punch Ingestion & Attendance Engine.**
 - `POST /api/v1/punches` and `POST /api/v1/punches/batch`; auth by per-tenant API key or device token
@@ -820,7 +842,9 @@ local dev.
 - Department Manager visibility is "as of today"; historical membership views belong to Reports.
 - No bulk group add; CSV import is create-only.
 - Multiple punch identifiers per employee, devices — Module 5.
-- Timetable/shift locking depends on Module 4 registering usage checkers.
+- `ScheduleChanged` has no listener until Module 5 (attendance recalculation).
+- Temporary schedules are per employee only; moving holidays (Eid, etc.) are entered each year.
+- Schedule rows whose department/group/employee was deleted show as "Deleted" and are ignored.
 - OpenAPI spec is hand-maintained; keep it in sync with routes and resources.
 - No frontend test runner.
 
