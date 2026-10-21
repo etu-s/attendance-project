@@ -4,6 +4,26 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ## [Unreleased]
 
+### Added — Module 3: Timetable & Shifts
+
+- Timetable module (`app/Modules/Timetable`): fixed and flexible timetables (minutes from midnight,
+  overnight allowed, optional core hours), fixed/floating paid/unpaid breaks, per-timetable grace and punch
+  windows over new `attendance.*` workspace defaults.
+- Shifts: weekly (up to 8 weeks) and N-day (up to 56 days) cycles with up to 3 non-overlapping timetables
+  per day, overlap checks across midnight and across the cycle wrap.
+- `ShiftCalendar`: lays a cycle onto real dates in a timezone (UTC instants, DST-aware, work date = start
+  date); preview endpoint.
+- `UsageRegistry`: time rules become read-only once a schedule uses them (Module 4 registers usage);
+  duplicate endpoints for timetables and shifts.
+- SPA: Timetables list and editor with a live 24-hour timeline, Shifts list, cycle editor and 28-day preview,
+  Attendance defaults in Settings.
+- 52 new Pest tests; OpenAPI spec v0.3.0.
+
+### Fixed
+
+- Local demo seeding (`composer setup`) failed because `DemoTenantSeeder` did not import the Organization
+  demo seeder.
+
 ### Added — Module 2: Organization & Employees
 
 - Organization module (`app/Modules/Organization`): organization profile, locations (with timezone

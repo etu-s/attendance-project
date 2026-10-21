@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: AMS API
-  version: 0.2.0
+  version: 0.3.0
   description: |
     Multi-tenant Attendance Management System. JSON only, versioned under `/api/v1`.
 
@@ -41,6 +41,7 @@ tags:
   - name: Health
   - name: Organization
   - name: Employees
+  - name: Timetables
 
 paths:
   /sanctum/csrf-cookie:
@@ -552,7 +553,7 @@ paths:
       type: object
       properties:
         message: { type: string }
-        rule: { type: string, enum: [plan_in_use, tenant_not_active, tenant_not_suspended, self_modification, self_deletion, admin_role_restricted, last_tenant_admin, location_in_use, department_cycle, department_has_children, department_in_use, group_in_use, plan_limit_reached, employee_terminated, employee_not_terminated, self_termination, before_hire_date, after_termination_date, no_assignment_on_date, assignment_unchanged, assignment_overlap, history_after_date, hire_date_after_history, rehire_before_termination, membership_overlap, not_a_member, group_inactive] }
+        rule: { type: string, enum: [plan_in_use, tenant_not_active, tenant_not_suspended, self_modification, self_deletion, admin_role_restricted, last_tenant_admin, location_in_use, department_cycle, department_has_children, department_in_use, group_in_use, plan_limit_reached, employee_terminated, employee_not_terminated, self_termination, before_hire_date, after_termination_date, no_assignment_on_date, assignment_unchanged, assignment_overlap, history_after_date, hire_date_after_history, rehire_before_termination, membership_overlap, not_a_member, group_inactive, timetable_locked, timetable_in_use, shift_locked, shift_in_use] }
     PaginationMeta:
       type: object
       properties:
@@ -814,6 +815,149 @@ paths:
       tags: [Employees]
       summary: Import status and row errors
       responses: { '200': { description: OK, content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/EmployeeImport' } } } } } } }
+
+  # ---------------------------------------------------------------- timetables & shifts (Module 3)
+  /api/v1/timetables:
+    get:
+      tags: [Timetables]
+      summary: List timetables (timetables.view)
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PerPage'
+        - $ref: '#/components/parameters/Search'
+        - { name: sort, in: query, schema: { type: string, enum: [name, -name, code, -code, start_minute, -start_minute, created_at, -created_at], default: name } }
+        - { name: type, in: query, schema: { type: string, enum: [fixed, flexible] } }
+        - { name: is_active, in: query, schema: { type: boolean } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: object, properties: { data: { type: array, items: { $ref: '#/components/schemas/Timetable' } }, meta: { $ref: '#/components/schemas/PaginationMeta' } } } } } }
+    post:
+      tags: [Timetables]
+      summary: Create a timetable with its breaks (timetables.manage)
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/TimetableInput' } } } }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/TimetableDetail' } } } }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v1/timetables/{timetable}:
+    parameters: [{ name: timetable, in: path, required: true, schema: { type: integer } }]
+    get:
+      tags: [Timetables]
+      summary: Show a timetable with meta.locked and meta.effective (grace/windows after workspace defaults)
+      responses: { '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/TimetableDetail' } } } } }
+    put:
+      tags: [Timetables]
+      summary: Update (partial; `breaks` replaces the set). Time rules of a timetable in use are read-only.
+      requestBody: { content: { application/json: { schema: { $ref: '#/components/schemas/TimetableInput' } } } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/TimetableDetail' } } } }
+        '409': { description: 'timetable_locked', content: { application/json: { schema: { $ref: '#/components/schemas/BusinessRuleError' } } } }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    delete:
+      tags: [Timetables]
+      summary: Delete a timetable that is in no shift
+      responses:
+        '204': { description: Deleted }
+        '409': { description: timetable_in_use, content: { application/json: { schema: { $ref: '#/components/schemas/BusinessRuleError' } } } }
+  /api/v1/timetables/{timetable}/duplicate:
+    parameters: [{ name: timetable, in: path, required: true, schema: { type: integer } }]
+    post:
+      tags: [Timetables]
+      summary: Copy with a free code (CODE-2, CODE-3, ...); the way to change a locked timetable
+      responses: { '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/TimetableDetail' } } } } }
+
+  /api/v1/shifts:
+    get:
+      tags: [Timetables]
+      summary: List shifts with their cycles (shifts.view)
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PerPage'
+        - $ref: '#/components/parameters/Search'
+        - { name: sort, in: query, schema: { type: string, enum: [name, -name, code, -code, created_at, -created_at], default: name } }
+        - { name: is_active, in: query, schema: { type: boolean } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: object, properties: { data: { type: array, items: { $ref: '#/components/schemas/Shift' } }, meta: { $ref: '#/components/schemas/PaginationMeta' } } } } } }
+    post:
+      tags: [Timetables]
+      summary: Create a shift header (shifts.manage); set its days with PUT shifts/{id}/days
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ShiftInput' } } } }
+      responses: { '201': { description: Created }, '422': { $ref: '#/components/responses/ValidationError' } }
+  /api/v1/shifts/{shift}:
+    parameters: [{ name: shift, in: path, required: true, schema: { type: integer } }]
+    get:
+      tags: [Timetables]
+      summary: Show a shift (meta.locked = used by a schedule)
+      responses: { '200': { description: OK, content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/Shift' }, meta: { type: object, properties: { locked: { type: boolean } } } } } } } } }
+    put:
+      tags: [Timetables]
+      summary: Update (partial). A shorter cycle must not cut off working days; the cycle of a shift in use is read-only.
+      requestBody: { content: { application/json: { schema: { $ref: '#/components/schemas/ShiftInput' } } } }
+      responses:
+        '200': { description: OK }
+        '409': { description: shift_locked, content: { application/json: { schema: { $ref: '#/components/schemas/BusinessRuleError' } } } }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    delete:
+      tags: [Timetables]
+      summary: Delete a shift that no schedule uses
+      responses:
+        '204': { description: Deleted }
+        '409': { description: shift_in_use, content: { application/json: { schema: { $ref: '#/components/schemas/BusinessRuleError' } } } }
+  /api/v1/shifts/{shift}/days:
+    parameters: [{ name: shift, in: path, required: true, schema: { type: integer } }]
+    put:
+      tags: [Timetables]
+      summary: Replace the whole cycle (days not listed are rest days)
+      description: |
+        At most 3 active timetables per day. Periods may not overlap, including an overnight period
+        running into the next day and the last day running into day 0 of the next cycle. Errors are
+        reported per day as `days.<day_index>`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [days]
+              properties:
+                days:
+                  type: array
+                  items: { type: object, required: [day_index, timetable_ids], properties: { day_index: { type: integer, minimum: 0 }, timetable_ids: { type: array, items: { type: integer } } } }
+      responses:
+        '200': { description: OK }
+        '409': { description: shift_locked }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v1/shifts/{shift}/duplicate:
+    parameters: [{ name: shift, in: path, required: true, schema: { type: integer } }]
+    post: { tags: [Timetables], summary: Copy with its cycle and a free code, responses: { '201': { description: Created } } }
+  /api/v1/shifts/{shift}/preview:
+    parameters: [{ name: shift, in: path, required: true, schema: { type: integer } }]
+    get:
+      tags: [Timetables]
+      summary: The cycle laid onto real dates (UTC instants; real minutes differ on DST days)
+      parameters:
+        - { name: from, in: query, required: true, schema: { type: string, format: date } }
+        - { name: to, in: query, required: true, schema: { type: string, format: date }, description: At most 62 days after from }
+        - { name: anchor, in: query, schema: { type: string, format: date }, description: 'Date the cycle starts (default: from). Week cycles count from its Monday.' }
+        - { name: timezone, in: query, schema: { type: string }, description: 'Default: workspace timezone' }
+      responses:
+        '200':
+          description: Every date in range, with periods (empty = rest day)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        date: { type: string, format: date, description: Work date = the date a period starts }
+                        day_index: { type: integer }
+                        periods:
+                          type: array
+                          items: { type: object, properties: { timetable: { type: object }, starts_at: { type: string, format: date-time }, ends_at: { type: string, format: date-time }, minutes: { type: integer } } }
+                  meta: { type: object, properties: { timezone: { type: string } } }
+        '422': { $ref: '#/components/responses/ValidationError' }
 
 components:
   parameters:
@@ -1080,3 +1224,90 @@ components:
         errors: { type: array, items: { type: object, properties: { row: { type: integer, description: CSV line number (header is line 1) }, code: { type: [string, 'null'] }, messages: { type: array, items: { type: string } } } } }
         started_at: { type: [string, 'null'], format: date-time }
         finished_at: { type: [string, 'null'], format: date-time }
+
+    # ---------------------------------------------------------------- Module 3
+    TimetableBreak:
+      type: object
+      properties:
+        kind: { type: string, enum: [fixed, floating] }
+        start_offset: { type: [integer, 'null'], description: Minutes after the timetable start (fixed only) }
+        duration_minutes: { type: integer, minimum: 1, maximum: 720 }
+        is_paid: { type: boolean }
+    Timetable:
+      type: object
+      description: All times are whole minutes from local midnight; end_minute above 1440 is the next day.
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        code: { type: string }
+        type: { type: string, enum: [fixed, flexible] }
+        color: { type: [string, 'null'], example: '#3b82f6' }
+        start_minute: { type: integer, minimum: 0, maximum: 1439 }
+        duration_minutes: { type: integer, minimum: 1, maximum: 1440, description: 'Fixed: the shift; flexible: the window' }
+        end_minute: { type: integer }
+        crosses_midnight: { type: boolean }
+        required_minutes: { type: [integer, 'null'], description: Flexible only }
+        core_start_offset: { type: [integer, 'null'], description: Flexible only, minutes after window start }
+        core_duration_minutes: { type: [integer, 'null'] }
+        late_grace_minutes: { type: [integer, 'null'], description: null = workspace default }
+        early_leave_grace_minutes: { type: [integer, 'null'] }
+        check_in_before_minutes: { type: [integer, 'null'] }
+        check_out_after_minutes: { type: [integer, 'null'] }
+        min_work_minutes: { type: [integer, 'null'] }
+        work_minutes: { type: integer, description: 'Fixed: length minus unpaid breaks; flexible: required minutes' }
+        is_active: { type: boolean }
+        breaks: { type: array, items: { $ref: '#/components/schemas/TimetableBreak' } }
+        shifts_count: { type: integer, description: List only }
+    TimetableInput:
+      type: object
+      properties:
+        name: { type: string, maxLength: 120 }
+        code: { type: string, maxLength: 30 }
+        type: { type: string, enum: [fixed, flexible] }
+        color: { type: [string, 'null'] }
+        start_minute: { type: integer }
+        duration_minutes: { type: integer }
+        required_minutes: { type: [integer, 'null'] }
+        core_start_offset: { type: [integer, 'null'] }
+        core_duration_minutes: { type: [integer, 'null'] }
+        late_grace_minutes: { type: [integer, 'null'] }
+        early_leave_grace_minutes: { type: [integer, 'null'] }
+        check_in_before_minutes: { type: [integer, 'null'] }
+        check_out_after_minutes: { type: [integer, 'null'] }
+        min_work_minutes: { type: [integer, 'null'] }
+        is_active: { type: boolean }
+        breaks: { type: array, maxItems: 4, items: { $ref: '#/components/schemas/TimetableBreak' } }
+    TimetableDetail:
+      type: object
+      properties:
+        data: { $ref: '#/components/schemas/Timetable' }
+        meta:
+          type: object
+          properties:
+            locked: { type: boolean, description: Used by a schedule; time rules and breaks are read-only }
+            effective: { type: object, properties: { late_grace_minutes: { type: integer }, early_leave_grace_minutes: { type: integer }, check_in_before_minutes: { type: integer }, check_out_after_minutes: { type: integer } } }
+    Shift:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        code: { type: string }
+        cycle_unit: { type: string, enum: [day, week] }
+        cycle_length: { type: integer, description: 'Days (max 56) or weeks (max 8)' }
+        cycle_days: { type: integer }
+        description: { type: [string, 'null'] }
+        is_active: { type: boolean }
+        working_days: { type: integer }
+        days:
+          type: array
+          description: Working days only; for week cycles day_index 0 is a Monday
+          items: { type: object, properties: { day_index: { type: integer }, timetables: { type: array, items: { type: object } } } }
+    ShiftInput:
+      type: object
+      properties:
+        name: { type: string, maxLength: 120 }
+        code: { type: string, maxLength: 30 }
+        cycle_unit: { type: string, enum: [day, week] }
+        cycle_length: { type: integer, minimum: 1 }
+        description: { type: [string, 'null'] }
+        is_active: { type: boolean }

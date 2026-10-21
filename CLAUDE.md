@@ -194,8 +194,8 @@ npm run build
 | --- | ----------------------------------- | ----------- |
 | 1   | Foundation                          | Approved (2026-10-20) |
 | 2   | Organization & Employees            | Approved (2026-10-21) |
-| 3   | Timetable & Shifts                  | Planning    |
-| 4   | Scheduling                          | Not started |
+| 3   | Timetable & Shifts                  | Approved (2026-10-21) |
+| 4   | Scheduling                          | Planning    |
 | 5   | Punch Ingestion & Attendance Engine | Not started |
 | 6   | Leave Management                    | Not started |
 | 7   | Overtime Management                 | Not started |
