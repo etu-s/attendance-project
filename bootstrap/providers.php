@@ -4,6 +4,7 @@ use App\Modules\Central\CentralServiceProvider;
 use App\Modules\Core\CoreServiceProvider;
 use App\Modules\Identity\IdentityServiceProvider;
 use App\Modules\Organization\OrganizationServiceProvider;
+use App\Modules\Scheduling\SchedulingServiceProvider;
 use App\Modules\Timetable\TimetableServiceProvider;
 use App\Providers\HorizonServiceProvider;
 use App\Providers\TenancyServiceProvider;
@@ -18,4 +19,5 @@ return [
     IdentityServiceProvider::class,
     OrganizationServiceProvider::class,
     TimetableServiceProvider::class,
+    SchedulingServiceProvider::class,
 ];

@@ -6,6 +6,8 @@ use App\Modules\Central\Database\Seeders\DemoTenantSeeder;
 use App\Modules\Central\Database\Seeders\PlanSeeder;
 use App\Modules\Central\Models\Domain;
 use App\Modules\Organization\Models\Employee;
+use App\Modules\Scheduling\Models\Holiday;
+use App\Modules\Scheduling\Models\ScheduleAssignment;
 use App\Modules\Timetable\Models\Shift;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
@@ -23,7 +25,9 @@ it('provisions the local demo tenant with its demo data, once', function (): voi
 
     $tenant->run(function (): void {
         expect(Employee::query()->count())->toBe(12)
-            ->and(Shift::query()->count())->toBe(4);
+            ->and(Shift::query()->count())->toBe(4)
+            ->and(ScheduleAssignment::query()->count())->toBe(4)
+            ->and(Holiday::query()->count())->toBe(7);
     });
 
     expect(Domain::query()->where('domain', 'acme')->count())->toBe(1);

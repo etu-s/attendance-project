@@ -9,12 +9,13 @@ use App\Modules\Central\Models\Plan;
 use App\Modules\Central\Services\TenantProvisioner;
 use App\Modules\Core\Tenancy\TenantProvisioningData;
 use App\Modules\Organization\Database\Seeders\DemoOrganizationSeeder;
+use App\Modules\Scheduling\Database\Seeders\DemoSchedulingSeeder;
 use App\Modules\Timetable\Database\Seeders\DemoTimetableSeeder;
 use Illuminate\Database\Seeder;
 
 /**
  * Local-only demo tenant at http://acme.localhost:5173 with its Tenant Admin
- * and demo data (organization, employees, timetables and shifts).
+ * and demo data (organization, employees, timetables, shifts and schedules).
  * Credentials come from config('ams.seed') (SEED_DEMO_ADMIN_* in .env) (defaults in .env.example).
  */
 final class DemoTenantSeeder extends Seeder
@@ -35,6 +36,6 @@ final class DemoTenantSeeder extends Seeder
             adminPassword: (string) config('ams.seed.demo_admin_password'),
         ));
 
-        $tenant->run(fn () => $this->call([DemoOrganizationSeeder::class, DemoTimetableSeeder::class]));
+        $tenant->run(fn () => $this->call([DemoOrganizationSeeder::class, DemoTimetableSeeder::class, DemoSchedulingSeeder::class]));
     }
 }
