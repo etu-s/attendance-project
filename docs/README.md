@@ -8,7 +8,7 @@ Start with the [System Guide](SYSTEM_GUIDE.md): architecture, tenancy, conventio
 | 2   | Organization & Employees            | Approved (2026-10-21)    | [modules/organization.md](modules/organization.md) |
 | 3   | Timetable & Shifts                  | Approved (2026-10-21)    | [modules/timetable.md](modules/timetable.md) |
 | 4   | Scheduling                          | Approved (2026-10-21)    | [modules/scheduling.md](modules/scheduling.md) |
-| 5   | Punch Ingestion & Attendance Engine | Not started              |                                           |
+| 5   | Punch Ingestion & Attendance Engine | Approved (2026-10-21)    | [modules/attendance.md](modules/attendance.md) |
 | 6   | Leave Management                    | Not started              |                                           |
 | 7   | Overtime Management                 | Not started              |                                           |
 | 8   | Reports & Analytics                 | Not started              |                                           |

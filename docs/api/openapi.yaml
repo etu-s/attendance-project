@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: AMS API
-  version: 0.4.0
+  version: 0.5.0
   description: |
     Multi-tenant Attendance Management System. JSON only, versioned under `/api/v1`.
 
@@ -11,8 +11,8 @@ info:
 
     **Auth.** The SPA uses Sanctum cookie sessions: `GET /sanctum/csrf-cookie` first, then send the
     `X-XSRF-TOKEN` header (value of the `XSRF-TOKEN` cookie) on every mutating request. Requests must
-    come from a stateful origin (`SANCTUM_STATEFUL_DOMAINS`). Bearer tokens are reserved for devices
-    and integrations (Punch Ingestion module).
+    come from a stateful origin (`SANCTUM_STATEFUL_DOMAINS`). Devices and integrations post punches
+    with a punch source key (`Authorization: Bearer ams_<prefix>_<secret>`, scheme PunchSourceKey).
 
     **Lists** accept `page`, `per_page` (max 100), `sort` (prefix `-` for descending) and `search`,
     plus per-endpoint filters, and return Laravel's paginated envelope (`data`, `links`, `meta`).
@@ -43,6 +43,7 @@ tags:
   - name: Employees
   - name: Timetables
   - name: Scheduling
+  - name: Attendance
 
 paths:
   /sanctum/csrf-cookie:
@@ -1114,7 +1115,241 @@ paths:
       responses: { '200': { description: OK }, '422': { $ref: '#/components/responses/ValidationError' } }
     delete: { tags: [Scheduling], summary: Delete a holiday (all years if recurring), responses: { '204': { description: Deleted } } }
 
+  # ---------------------------------------------------------------- attendance (Module 5)
+  /api/v1/punches:
+    post:
+      tags: [Attendance]
+      summary: Ingest one punch (punch source key)
+      description: |
+        Stores the raw punch and answers 202; matching and attendance run on the queue. Duplicates
+        (same source + identifier + instant, or same source + idempotency_key) answer 202 with
+        `status: duplicate` and the original id. Punches older than `attendance.backlog_days` are kept
+        but never counted. Rate limited per source key (PUNCH_RATE_LIMIT, default 600/min).
+      security: [{ PunchSourceKey: [] }]
+      parameters:
+        - { name: X-Timestamp, in: header, schema: { type: string }, description: Unix seconds; required for signed sources (±300 s) }
+        - { name: X-Signature, in: header, schema: { type: string }, description: 'sha256=<hex HMAC-SHA256 of "<timestamp>.<raw body>" with the signing secret>; signed sources only' }
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/PunchInput' } } } }
+      responses:
+        '202': { description: Stored (or duplicate), content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/PunchResult' } } } } } }
+        '401': { description: Missing/invalid key, or missing/expired/invalid signature }
+        '403': { description: Source inactive, or address not in the source's allowlist }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+  /api/v1/punches/batch:
+    post:
+      tags: [Attendance]
+      summary: Ingest up to attendance.max_batch_size punches in one transaction
+      description: Each item is validated on its own; valid items are stored, invalid ones reported. Results keep the request index.
+      security: [{ PunchSourceKey: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [punches], properties: { punches: { type: array, minItems: 1, items: { $ref: '#/components/schemas/PunchInput' } } } } } }
+      responses:
+        '202':
+          description: Per-item results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { type: object, properties: { index: { type: integer }, status: { type: string, enum: [accepted, duplicate, invalid] }, id: { type: [integer, 'null'] }, errors: { type: [object, 'null'] } } } }
+                  meta: { type: object, properties: { accepted: { type: integer }, duplicate: { type: integer }, invalid: { type: integer } } }
+        '401': { description: Invalid key or signature }
+        '422': { description: Empty or oversized batch }
+
+  /api/v1/punch-sources:
+    get:
+      tags: [Attendance]
+      summary: Devices and integrations (punch-sources.manage, Tenant Admin)
+      responses: { '200': { description: OK, content: { application/json: { schema: { type: object, properties: { data: { type: array, items: { $ref: '#/components/schemas/PunchSource' } } } } } } } }
+    post:
+      tags: [Attendance]
+      summary: Create a source; the key (and signing secret) are returned once
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [name, kind], properties: { name: { type: string, maxLength: 120 }, kind: { type: string, enum: [device, integration] }, ip_allowlist: { type: [array, 'null'], maxItems: 20, items: { type: string, description: IP or CIDR } }, signed: { type: boolean } } } } }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/PunchSourceSecrets' } } } }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v1/punch-sources/{punchSource}:
+    parameters: [{ name: punchSource, in: path, required: true, schema: { type: integer } }]
+    get: { tags: [Attendance], summary: Show a source, responses: { '200': { description: OK } } }
+    put:
+      tags: [Attendance]
+      summary: Rename, change kind or allowlist, activate/deactivate
+      requestBody: { content: { application/json: { schema: { type: object, properties: { name: { type: string }, kind: { type: string, enum: [device, integration] }, ip_allowlist: { type: [array, 'null'], items: { type: string } }, is_active: { type: boolean } } } } } }
+      responses: { '200': { description: OK }, '422': { $ref: '#/components/responses/ValidationError' } }
+    delete:
+      tags: [Attendance]
+      summary: Delete a source that never sent a punch
+      responses: { '204': { description: Deleted }, '409': { description: 'punch_source_in_use: deactivate instead' } }
+  /api/v1/punch-sources/{punchSource}/rotate-key:
+    parameters: [{ name: punchSource, in: path, required: true, schema: { type: integer } }]
+    post:
+      tags: [Attendance]
+      summary: New key (and signing secret if signed); the old key stops working at once
+      responses: { '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/PunchSourceSecrets' } } } } }
+
+  /api/v1/raw-punches:
+    get:
+      tags: [Attendance]
+      summary: The raw punch log, read-only (punches.view)
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PerPage'
+        - { name: sort, in: query, schema: { type: string, enum: [punched_at, -punched_at, received_at, -received_at], default: -punched_at } }
+        - { name: search, in: query, schema: { type: string }, description: Identifier as sent }
+        - { name: punch_source_id, in: query, schema: { type: integer } }
+        - { name: employee_id, in: query, schema: { type: integer } }
+        - { name: from, in: query, schema: { type: string, format: date }, description: UTC date }
+        - { name: to, in: query, schema: { type: string, format: date }, description: UTC date }
+        - { name: state, in: query, schema: { type: string, enum: [matched, unmatched, too_old] } }
+      responses: { '200': { description: OK, content: { application/json: { schema: { type: object, properties: { data: { type: array, items: { $ref: '#/components/schemas/RawPunch' } }, meta: { $ref: '#/components/schemas/PaginationMeta' } } } } } } }
+
+  /api/v1/orphan-punches:
+    get:
+      tags: [Attendance]
+      summary: Punches whose identifier matched nobody (punches.view); open unless status says otherwise
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PerPage'
+        - { name: status, in: query, schema: { type: string, enum: [open, resolved, dismissed], default: open } }
+        - { name: search, in: query, schema: { type: string } }
+      responses: { '200': { description: OK, content: { application/json: { schema: { type: object, properties: { data: { type: array, items: { $ref: '#/components/schemas/OrphanPunch' } }, meta: { $ref: '#/components/schemas/PaginationMeta' } } } } } } }
+  /api/v1/orphan-punches/{orphanPunch}/link:
+    parameters: [{ name: orphanPunch, in: path, required: true, schema: { type: integer } }]
+    post:
+      tags: [Attendance]
+      summary: Link the identifier to an employee (punches.manage)
+      description: The identifier becomes one of the employee's punch identifiers; every open orphan with it is matched and attendance recalculated.
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [employee_id], properties: { employee_id: { type: integer } } } } } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: object, properties: { linked: { type: integer } } } } } }
+        '409': { description: Already linked or dismissed }
+        '422': { description: The identifier is another employee's code or identifier }
+  /api/v1/orphan-punches/{orphanPunch}/dismiss:
+    parameters: [{ name: orphanPunch, in: path, required: true, schema: { type: integer } }]
+    post: { tags: [Attendance], summary: Mark as not an employee's punch (never counted), responses: { '200': { description: OK }, '409': { description: Already decided } } }
+
+  /api/v1/employees/{employee}/punch-identifiers:
+    parameters: [{ name: employee, in: path, required: true, schema: { type: integer } }]
+    get: { tags: [Attendance], summary: Extra identifiers (badges, cards) of an employee (punches.view), responses: { '200': { description: OK, content: { application/json: { schema: { type: object, properties: { data: { type: array, items: { $ref: '#/components/schemas/PunchIdentifier' } } } } } } } } }
+    post:
+      tags: [Attendance]
+      summary: Add an identifier (punches.manage); open orphans with it are linked
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [identifier], properties: { identifier: { type: string, maxLength: 64 }, label: { type: [string, 'null'], maxLength: 60 } } } } } }
+      responses: { '201': { description: Created }, '422': { description: Taken by another identifier, or equal to an employee code } }
+  /api/v1/punch-identifiers/{punchIdentifier}:
+    parameters: [{ name: punchIdentifier, in: path, required: true, schema: { type: integer } }]
+    delete: { tags: [Attendance], summary: Remove an identifier (matched punches stay with the employee), responses: { '204': { description: Deleted } } }
+
+  /api/v1/attendance:
+    get:
+      tags: [Attendance]
+      summary: Calculated days of the viewer's employees (attendance.view)
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PerPage'
+        - { name: sort, in: query, schema: { type: string, enum: [work_date, -work_date, worked_minutes, -worked_minutes, late_minutes, -late_minutes, first_in_at, -first_in_at], default: -work_date } }
+        - { name: search, in: query, schema: { type: string }, description: Employee name or code }
+        - { name: date, in: query, schema: { type: string, format: date } }
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+        - { name: status, in: query, schema: { type: string }, description: One status or a comma-separated list }
+        - { name: employee_id, in: query, schema: { type: integer } }
+        - { name: department_id, in: query, schema: { type: integer }, description: Department recorded on the day, incl. sub-departments }
+        - { name: group_id, in: query, schema: { type: integer }, description: Current group membership }
+      responses: { '200': { description: OK, content: { application/json: { schema: { type: object, properties: { data: { type: array, items: { $ref: '#/components/schemas/AttendanceDay' } }, meta: { $ref: '#/components/schemas/PaginationMeta' } } } } } } }
+  /api/v1/attendance/summary:
+    get:
+      tags: [Attendance]
+      summary: Counts per status on one date (the Today board)
+      parameters:
+        - { name: date, in: query, required: true, schema: { type: string, format: date } }
+        - { name: department_id, in: query, schema: { type: integer } }
+        - { name: group_id, in: query, schema: { type: integer } }
+      responses: { '200': { description: OK, content: { application/json: { schema: { type: object, properties: { data: { type: object, properties: { date: { type: string, format: date }, counts: { type: object, additionalProperties: { type: integer } }, total: { type: integer } } } } } } } } }
+  /api/v1/attendance/{attendanceDay}:
+    parameters: [{ name: attendanceDay, in: path, required: true, schema: { type: integer } }]
+    get:
+      tags: [Attendance]
+      summary: One day with periods, punches and corrections (attendance.view and visible employee, or the employee themself)
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/AttendanceDay' }, corrections: { type: array, items: { $ref: '#/components/schemas/PunchCorrection' } } } } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/attendance/recalculate:
+    post:
+      tags: [Attendance]
+      summary: Queue a recalculation of up to 92 days (attendance.manage)
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [from, to], properties: { from: { type: string, format: date }, to: { type: string, format: date }, employee_id: { type: [integer, 'null'], description: null = everyone } } } } } }
+      responses: { '202': { description: Queued }, '422': { $ref: '#/components/responses/ValidationError' } }
+  /api/v1/employees/{employee}/attendance:
+    parameters: [{ name: employee, in: path, required: true, schema: { type: integer } }]
+    get:
+      tags: [Attendance]
+      summary: Calculated days of one employee, up to 62 days (attendance.view, visible employee)
+      parameters:
+        - { name: from, in: query, required: true, schema: { type: string, format: date } }
+        - { name: to, in: query, required: true, schema: { type: string, format: date } }
+      responses: { '200': { description: OK, content: { application/json: { schema: { type: object, properties: { data: { type: array, items: { $ref: '#/components/schemas/AttendanceDay' } } } } } } } }
+  /api/v1/me/attendance:
+    get:
+      tags: [Attendance]
+      summary: The signed-in employee's own days (404 when the login has no employee)
+      parameters:
+        - { name: from, in: query, required: true, schema: { type: string, format: date } }
+        - { name: to, in: query, required: true, schema: { type: string, format: date } }
+      responses: { '200': { description: OK }, '404': { description: Not linked } }
+
+  /api/v1/punch-corrections:
+    get:
+      tags: [Attendance]
+      summary: Corrections of the viewer's employees (corrections.request or corrections.approve)
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PerPage'
+        - { name: sort, in: query, schema: { type: string, enum: [created_at, -created_at, work_date, -work_date], default: -created_at } }
+        - { name: status, in: query, schema: { type: string, enum: [pending, approved, rejected] } }
+        - { name: kind, in: query, schema: { type: string, enum: [add, ignore] } }
+        - { name: employee_id, in: query, schema: { type: integer } }
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+        - { name: search, in: query, schema: { type: string } }
+      responses: { '200': { description: OK, content: { application/json: { schema: { type: object, properties: { data: { type: array, items: { $ref: '#/components/schemas/PunchCorrection' } }, meta: { $ref: '#/components/schemas/PaginationMeta' } } } } } } }
+    post:
+      tags: [Attendance]
+      summary: Request a correction (corrections.request, visible employee)
+      description: |
+        Entered by someone who sees everyone and may approve (HR, Tenant Admin): approved at once.
+        Otherwise pending. add needs punched_at within the work date ±1 day; ignore needs one of the
+        employee's raw punches not already ignored or pending.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [employee_id, work_date, kind, reason], properties: { employee_id: { type: integer }, work_date: { type: string, format: date }, kind: { type: string, enum: [add, ignore] }, punched_at: { type: string, format: date-time, description: 'add: ISO 8601 with offset' }, raw_punch_id: { type: integer, description: ignore }, reason: { type: string, minLength: 3, maxLength: 255 } } } } }
+      responses: { '201': { description: Created }, '403': { $ref: '#/components/responses/Forbidden' }, '422': { $ref: '#/components/responses/ValidationError' } }
+  /api/v1/punch-corrections/{punchCorrection}/approve:
+    parameters: [{ name: punchCorrection, in: path, required: true, schema: { type: integer } }]
+    post:
+      tags: [Attendance]
+      summary: Approve (corrections.approve; never your own request or about yourself); recalculates the day
+      requestBody: { content: { application/json: { schema: { type: object, properties: { note: { type: [string, 'null'], maxLength: 255 } } } } } }
+      responses: { '200': { description: OK }, '403': { description: 'correction_own' }, '409': { description: 'correction_decided' } }
+  /api/v1/punch-corrections/{punchCorrection}/reject:
+    parameters: [{ name: punchCorrection, in: path, required: true, schema: { type: integer } }]
+    post:
+      tags: [Attendance]
+      summary: Reject (same rules as approve)
+      requestBody: { content: { application/json: { schema: { type: object, properties: { note: { type: [string, 'null'], maxLength: 255 } } } } } }
+      responses: { '200': { description: OK }, '403': { description: 'correction_own' }, '409': { description: 'correction_decided' } }
+
 components:
+  securitySchemes:
+    PunchSourceKey:
+      type: http
+      scheme: bearer
+      description: Punch source key from the create / rotate-key response (ingestion endpoints only).
+
   parameters:
     Page: { name: page, in: query, schema: { type: integer, minimum: 1 } }
     PerPage: { name: per_page, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 15 } }
@@ -1533,3 +1768,120 @@ components:
           type: array
           description: Kept on holidays (for overtime rules); empty on rest days
           items: { type: object, properties: { timetable: { type: object }, starts_at: { type: string, format: date-time }, ends_at: { type: string, format: date-time }, minutes: { type: integer } } }
+    # ---------------------------------------------------------------- Module 5
+    PunchInput:
+      type: object
+      required: [employee_identifier, punched_at]
+      properties:
+        employee_identifier: { type: string, maxLength: 64, description: Employee code or one of the employee's punch identifiers }
+        punched_at: { type: string, format: date-time, description: 'ISO 8601 with offset (Z or ±hh:mm); at most 5 minutes in the future' }
+        direction: { type: [string, 'null'], enum: [in, out, null], description: Used only when attendance.use_punch_direction is on }
+        idempotency_key: { type: [string, 'null'], maxLength: 100 }
+        meta: { type: [object, 'null'], description: Free-form, at most 2 KB as JSON }
+    PunchResult:
+      type: object
+      properties:
+        id: { type: integer, description: Raw punch id (the original one for a duplicate) }
+        status: { type: string, enum: [accepted, duplicate] }
+    PunchSource:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        kind: { type: string, enum: [device, integration] }
+        key_hint: { type: string, example: ams_ab12cd34ef_… }
+        signed: { type: boolean }
+        ip_allowlist: { type: array, items: { type: string } }
+        is_active: { type: boolean }
+        last_used_at: { type: [string, 'null'], format: date-time }
+        created_at: { type: string, format: date-time }
+    PunchSourceSecrets:
+      type: object
+      description: Only returned by create and rotate-key; never retrievable again.
+      properties:
+        data: { $ref: '#/components/schemas/PunchSource' }
+        key: { type: string, example: ams_ab12cd34ef_<40 characters> }
+        signing_secret: { type: [string, 'null'] }
+    RawPunch:
+      type: object
+      properties:
+        id: { type: integer }
+        source: { type: object, properties: { id: { type: integer }, name: { type: string } } }
+        employee_identifier: { type: string }
+        punched_at: { type: string, format: date-time }
+        direction: { type: [string, 'null'] }
+        idempotency_key: { type: [string, 'null'] }
+        meta: { type: [object, 'null'] }
+        too_old: { type: boolean }
+        received_at: { type: string, format: date-time }
+        state: { type: string, enum: [matched, unmatched, dismissed, pending] }
+        employee: { type: [object, 'null'] }
+    OrphanPunch:
+      type: object
+      properties:
+        id: { type: integer }
+        raw_punch_id: { type: integer }
+        employee_identifier: { type: string }
+        punched_at: { type: string, format: date-time }
+        too_old: { type: boolean }
+        source: { type: object }
+        status: { type: string, enum: [open, resolved, dismissed] }
+        employee: { type: [object, 'null'] }
+        decided_at: { type: [string, 'null'], format: date-time }
+    PunchIdentifier:
+      type: object
+      properties:
+        id: { type: integer }
+        employee_id: { type: integer }
+        identifier: { type: string }
+        label: { type: [string, 'null'] }
+        created_at: { type: string, format: date-time }
+    AttendanceDay:
+      type: object
+      description: Calculated attendance of one employee on one work date. Instants are UTC; display them in `timezone`.
+      properties:
+        id: { type: integer }
+        employee_id: { type: integer }
+        employee: { type: object, description: On lists and the detail }
+        work_date: { type: string, format: date }
+        status: { type: string, enum: [present, late, early_leave, late_early, incomplete, absent, in_progress, holiday, rest, day_off, unscheduled, not_employed] }
+        timezone: { type: string }
+        holiday_name: { type: [string, 'null'] }
+        schedule_source: { type: [string, 'null'], enum: [temporary, employee, group, department, organization, null] }
+        shift_id: { type: [integer, 'null'] }
+        department_id: { type: [integer, 'null'], description: Department on that day }
+        location_id: { type: [integer, 'null'] }
+        first_in_at: { type: [string, 'null'], format: date-time }
+        last_out_at: { type: [string, 'null'], format: date-time }
+        scheduled_minutes: { type: integer }
+        worked_minutes: { type: integer }
+        late_minutes: { type: integer }
+        early_leave_minutes: { type: integer }
+        unmatched_punches: { type: integer, description: Punches outside every window on a working day (not counted) }
+        flags: { type: array, items: { type: string, enum: [missing_in, missing_out, missed_period, below_minimum, off_day_work] } }
+        calculated_at: { type: string, format: date-time, description: When the result last changed }
+        periods:
+          type: array
+          description: Detail endpoint only
+          items: { type: object, properties: { timetable_name: { type: string }, flexible: { type: boolean }, scheduled_start_at: { type: string, format: date-time }, scheduled_end_at: { type: string, format: date-time }, in_at: { type: [string, 'null'] }, out_at: { type: [string, 'null'] }, worked_minutes: { type: integer }, break_minutes: { type: integer }, late_minutes: { type: integer }, early_leave_minutes: { type: integer } } }
+        punches:
+          type: array
+          description: Detail endpoint only
+          items: { type: object, properties: { raw_punch_id: { type: [integer, 'null'] }, punch_correction_id: { type: [integer, 'null'] }, punched_at: { type: string, format: date-time }, role: { type: string, enum: [in, out, extra, duplicate, unmatched, ignored] }, source: { type: [string, 'null'] } } }
+    PunchCorrection:
+      type: object
+      properties:
+        id: { type: integer }
+        employee: { type: object }
+        work_date: { type: string, format: date }
+        kind: { type: string, enum: [add, ignore] }
+        punched_at: { type: [string, 'null'], format: date-time }
+        raw_punch: { type: [object, 'null'] }
+        reason: { type: string }
+        status: { type: string, enum: [pending, approved, rejected] }
+        requested_by: { type: [object, 'null'] }
+        decided_by: { type: [object, 'null'] }
+        decided_at: { type: [string, 'null'], format: date-time }
+        decision_note: { type: [string, 'null'] }
+        created_at: { type: string, format: date-time }
+        can_decide: { type: boolean, description: Whether the viewer may approve or reject it }

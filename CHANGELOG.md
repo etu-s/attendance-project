@@ -4,6 +4,28 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ## [Unreleased]
 
+### Added — Module 5: Punch Ingestion & Attendance Engine
+
+- Attendance module (`app/Modules/Attendance`): `POST /punches` and `/punches/batch` with per-source keys
+  (hashed, shown once), optional HMAC signatures and IP allowlists, rate limiting, strict validation,
+  idempotency in unique indexes, and an append-only raw punch table enforced by SQLite triggers.
+- Queue processing with one attendance writer per tenant; unknown identifiers kept as unmatched punches
+  that can be linked (teaching a new punch identifier) or dismissed.
+- Attendance engine: punch windows, nearest-period placement (overnight, split shifts), debounce,
+  grace, unpaid breaks, rounding, flexible core hours, minimum work, holiday/rest-day work, DST-accurate
+  scheduled time; recalculation on schedule changes, corrections and every 15 minutes; unchanged days are
+  not rewritten.
+- Corrections (add a missed punch / ignore a wrong one) with approval rules and audit trail.
+- `php artisan punches:simulate` (direct or over HTTP) and `php artisan attendance:close-days`.
+- SPA: Today board, Attendance list, day drawer, Corrections, Punch log, Unmatched punches, Punch sources,
+  employee Attendance tab, My attendance; grouped sidebar.
+- 65 new Pest tests (352 total); OpenAPI spec v0.5.0.
+
+### Fixed
+
+- The local `database` queue wrote jobs dispatched inside a workspace to that workspace's SQLite file
+  (no `jobs` table there); queued jobs now always use the central connection.
+
 ### Added — Module 4: Scheduling
 
 - Scheduling module (`app/Modules/Scheduling`): dated shift assignments for the organization default,

@@ -71,7 +71,7 @@ before the next starts (see [§18](#18-workflow-quality-gates-and-git)).
 | 2   | Organization & Employees            | Approved 2026-10-21                              | [organization.md](modules/organization.md)       |
 | 3   | Timetable & Shifts                  | Approved 2026-10-21                              | [timetable.md](modules/timetable.md)             |
 | 4   | Scheduling                          | Approved 2026-10-21                              | [scheduling.md](modules/scheduling.md)           |
-| 5   | Punch Ingestion & Attendance Engine | Not started                                      |                                                  |
+| 5   | Punch Ingestion & Attendance Engine | Approved 2026-10-21                              | [attendance.md](modules/attendance.md)           |
 | 6   | Leave Management                    | Not started                                      |                                                  |
 | 7   | Overtime Management                 | Not started                                      |                                                  |
 | 8   | Reports & Analytics                 | Not started                                      |                                                  |
@@ -95,7 +95,7 @@ Change history is in [CHANGELOG.md](../CHANGELOG.md).
 | Permissions        | `spatie/laravel-permission` v8, driven by a module permission catalog     |
 | Queues             | Redis + Horizon in production; `queue:work` with the database driver locally on Windows |
 | Cache              | Redis (tenancy tags cache entries per tenant)                             |
-| Real time          | Laravel Reverb — installed, **not configured yet** (Module 5 will wire it)|
+| Real time          | Laravel Reverb — installed, **not configured yet** (Hardening; the Today board polls every 30 s) |
 | Tests              | Pest 5                                                                    |
 | Style              | Laravel Pint, `declare(strict_types=1)`, typed properties and returns     |
 
@@ -201,7 +201,7 @@ morph map, registers policies, permissions, settings and event listeners). See
 [TimetableServiceProvider.php](../app/Modules/Timetable/TimetableServiceProvider.php).
 
 Current provider order (`bootstrap/providers.php`): Tenancy, Horizon, Core, Central, Identity, Organization,
-Timetable, Scheduling. Keep new modules after the modules they depend on.
+Timetable, Scheduling, Attendance. Keep new modules after the modules they depend on.
 
 ### 5.2 How modules talk to each other
 
@@ -224,6 +224,8 @@ Timetable, Scheduling. Keep new modules after the modules they depend on.
 | `AssignmentService::forEmployees()` / `MembershipService::forEmployees()` / `DepartmentTree::ancestorChains()` | Organization | Range lookups for many employees at once (no N+1) |
 | `ScheduleResolver::forEmployee()` / `forEmployees()` | Scheduling | The **only** answer to "what is E scheduled to do on D, and why" (status, periods in UTC, timezone, deciding level) |
 | `ScheduleChanged`                | Scheduling event | Fired after commit for every assignment, temporary-schedule or holiday change (scope + date range); attendance recalculation listens |
+| `AttendanceCalculator::recalculate($ids, $from, $to)` | Attendance | Rebuilds attendance days (queued via `RecalculateAttendance`; one writer per tenant). Leave and overtime will feed and read it |
+| `AttendanceQuery` | Attendance | Visibility-scoped reads of attendance days and per-status counts (for Reports) |
 
 ### 5.3 Layering inside a module
 
@@ -348,7 +350,7 @@ typed as confirmation; a `VACUUM INTO` backup is written first. Subdomains are 2
 | ------------ | ---------------------------- | -------------------------------------------------- |
 | Super admin  | central host, `central` guard | Sanctum SPA cookie session, `super_admins` table  |
 | Tenant users | tenant host                  | Sanctum SPA cookie session, tenant `users` table   |
-| Devices/integrations | tenant host (Module 5) | Sanctum personal access tokens / per-tenant API keys (hashed, shown once) |
+| Devices/integrations | tenant host, ingestion routes only | Punch source key `Bearer ams_<prefix>_<secret>` (sha256 at rest, shown once), optional HMAC + IP allowlist |
 
 Login is rate limited (5/min per host + email + IP); the API is limited to 120/min per host + user
 (`config/ams.php`, `LOGIN_RATE_LIMIT`, `API_RATE_LIMIT`).
@@ -579,25 +581,34 @@ employee profile Schedule tab, My schedule. Demo data: `DemoSchedulingSeeder` (4
 
 Full detail: [modules/scheduling.md](modules/scheduling.md).
 
+### 12.5 Module 5 — Punch Ingestion & Attendance Engine (`Attendance`) — *approved 2026-10-21*
+
+**Flow:** `POST /punches` (punch source key; HMAC and IP allowlist optional) stores the raw punch and answers
+`202` → `ProcessPunches` (one writer per tenant) matches it to an employee (`punch_matches`) or keeps it as
+an orphan → `AttendanceCalculator` (= `ScheduleResolver` + `DayEvaluator`) writes `attendance_days` with
+periods and punch roles. Raw punches are append-only (SQLite triggers); idempotency is two unique indexes.
+
+**Rules:** punch windows per period, nearest-edge placement (overnight, split shifts), debounce, grace from
+the scheduled edges, unpaid breaks, rounding, flexible core hours and required time, minimum work → absent,
+`in_progress` until the last window closes, holiday/rest-day work recorded. Recalculated on new punches,
+`ScheduleChanged`, approved corrections, linked orphans, on demand, and every 15 minutes
+(`attendance:close-days`); unchanged days are not rewritten (fingerprint).
+
+**Corrections** (add / ignore a punch) need approval (HR; managers for their people; never your own);
+HR entries apply at once. **Unmatched punches** are linked (the identifier becomes the employee's punch
+identifier) or dismissed.
+
+**Screens:** Today (live tiles, 30 s), Attendance, day drawer, Corrections, Punch log, Unmatched punches,
+Punch sources (key shown once), employee Attendance tab, My attendance; the sidebar is grouped by area.
+
+Full detail: [modules/attendance.md](modules/attendance.md).
+
 ---
 
 ## 13. Planned modules and their domain rules
 
 These rules are fixed by CLAUDE.md and must be honoured when the modules are built. Each still gets its own
 plan and approval.
-
-**Module 5 — Punch Ingestion & Attendance Engine.**
-- `POST /api/v1/punches` and `POST /api/v1/punches/batch`; auth by per-tenant API key or device token
-  (hashed at rest, shown once), optional HMAC signature and IP allowlist, rate limited.
-- Insert the raw punch and return **`202 Accepted`**; process in a queue (sequential per tenant). Batch
-  inserts in one transaction.
-- **Raw punches are append-only** — never edited or deleted. Corrections are separate records with approval
-  and audit trail.
-- **Idempotency:** same device + identifier + timestamp, or same idempotency key → no duplicate (unique index).
-- Unknown employee identifiers go to an **orphan-punch queue**, not dropped.
-- Attendance is **recalculable** and safe to re-run; thresholds come only from `TimetableRules`; work date
-  from `ShiftCalendar`. Multiple punch identifiers per employee arrive here.
-- Keep `php artisan punches:simulate` working; wire Reverb for live updates.
 
 **Module 6 — Leave.** Balance is a **ledger** (every credit/debit is a transaction; never mutate a balance).
 Approved leave, holidays and weekly offs feed attendance status. Test leave overlapping holidays and
@@ -710,7 +721,9 @@ the origin to `SANCTUM_STATEFUL_DOMAINS`.
 | `php artisan tenants:seed --force` | re-sync roles/permissions, missing settings and defaults (idempotent) |
 | `php artisan db:backup [--tenant=ID]` | `VACUUM INTO` backups |
 | `php artisan route:list --path=api --except-vendor` | live endpoint list |
-| `php artisan punches:simulate` | Module 5 (not yet built) |
+| `php artisan punches:simulate --tenant=acme` | punches from real schedules (`--http --key=…` posts through the API) |
+| `php artisan attendance:close-days` | re-evaluate recent days (scheduled every 15 minutes) |
+| `php artisan schedule:work` | run the scheduler locally |
 | `composer test` | Pest |
 | `./vendor/bin/pint` / `--test` | format / check PHP style |
 | `npm run lint` · `npm run typecheck` · `npm run build` · `npm run format` | frontend gates (in `frontend/`) |
@@ -832,7 +845,7 @@ local dev.
 
 ## 19. Known limitations and open follow-ups
 
-- Reverb installed but not configured (Module 5).
+- Reverb installed but not configured (Hardening); the Today board polls every 30 s.
 - Horizon cannot run on Windows; use `queue:work`.
 - No password reset / invitation email flow; admins set passwords.
 - No restore endpoint for soft-deleted users (email stays reserved).
@@ -841,8 +854,9 @@ local dev.
 - Transfers/terminations cannot be undone — correct with another dated change; history rows are not editable.
 - Department Manager visibility is "as of today"; historical membership views belong to Reports.
 - No bulk group add; CSV import is create-only.
-- Multiple punch identifiers per employee, devices — Module 5.
-- `ScheduleChanged` has no listener until Module 5 (attendance recalculation).
+- `ScheduleChanged` for a department/group/location recalculates everyone employed in the range (unchanged days are skipped).
+- New employee codes are not checked against punch identifiers (the code wins for new punches).
+- A pending punch correction cannot be withdrawn by its requester.
 - Temporary schedules are per employee only; moving holidays (Eid, etc.) are entered each year.
 - Schedule rows whose department/group/employee was deleted show as "Deleted" and are ignored.
 - OpenAPI spec is hand-maintained; keep it in sync with routes and resources.
