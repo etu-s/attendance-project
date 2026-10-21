@@ -85,3 +85,28 @@ export function exampleTime(format: string): string {
 }
 
 export const weekdayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as const
+
+/**
+ * A calendar date from the API ("2026-02-01": hire dates, effective dates).
+ * It has no time or timezone, so it is formatted as-is, never shifted.
+ */
+export function formatLocalDate(date: string | null | undefined, prefs: DisplayPreferences = defaultPreferences): string {
+  if (!date) {
+    return '—'
+  }
+
+  return formatDate(`${date}T12:00:00Z`, { ...prefs, timezone: 'UTC' })
+}
+
+/** Today's calendar date (Y-m-d) in the given timezone, e.g. the workspace timezone. */
+export function todayIn(timezone: string): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date())
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? ''
+
+  return `${get('year')}-${get('month')}-${get('day')}`
+}
