@@ -37,7 +37,10 @@ return [
 
         'database' => [
             'driver' => 'database',
-            'connection' => env('DB_QUEUE_CONNECTION'),
+            // Always central: inside tenant context the default connection is the
+            // tenant's file, which has no jobs table (QueueTenancyBootstrapper
+            // carries the tenant id in the payload instead).
+            'connection' => env('DB_QUEUE_CONNECTION', 'central'),
             'table' => env('DB_QUEUE_TABLE', 'jobs'),
             'queue' => env('DB_QUEUE', 'default'),
             'retry_after' => (int) env('DB_QUEUE_RETRY_AFTER', 90),
