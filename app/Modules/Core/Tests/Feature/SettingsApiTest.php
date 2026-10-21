@@ -16,10 +16,17 @@ beforeEach(function (): void {
 });
 
 it('lists every registered setting with its current value', function (): void {
-    $this->actingAsTenantUser($this->admin)
+    $response = $this->actingAsTenantUser($this->admin)
         ->getJson($this->tenantUrl($this->tenant, 'settings'))
-        ->assertOk()
-        ->assertJsonCount(4, 'data')
+        ->assertOk();
+
+    // Other modules add their own groups; the general group is Core's.
+    expect(collect($response->json('data'))->where('group', 'general')->pluck('key')->sort()->values()->all())
+        ->toBe(['general.date_format', 'general.time_format', 'general.timezone', 'general.week_start'])
+        ->and(collect($response->json('data'))->pluck('key')->all())
+        ->toEqual(array_values(array_unique(collect($response->json('data'))->pluck('key')->all())));
+
+    $response
         ->assertJsonFragment(['key' => 'general.timezone', 'value' => 'Asia/Karachi', 'type' => 'string', 'group' => 'general'])
         ->assertJsonFragment(['key' => 'general.week_start', 'value' => 1, 'options' => [0, 1, 2, 3, 4, 5, 6]]);
 });
