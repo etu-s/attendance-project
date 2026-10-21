@@ -44,7 +44,8 @@ export function Field({ label, error, hint, className, children }: FieldProps) {
         : children
 
   return (
-    <div className={cn('grid gap-1.5', className)}>
+    // content-start: in a row next to a taller field (hint/error), keep label and control at the top.
+    <div className={cn('grid content-start gap-1.5', className)}>
       <Label htmlFor={id}>{label}</Label>
       {control}
       {hint && !error && (
