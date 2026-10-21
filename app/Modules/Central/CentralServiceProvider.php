@@ -10,9 +10,11 @@ use App\Modules\Central\Models\SuperAdmin;
 use App\Modules\Central\Models\Tenant;
 use App\Modules\Central\Policies\PlanPolicy;
 use App\Modules\Central\Policies\TenantPolicy;
+use App\Modules\Central\Services\CurrentTenantPlanLimits;
 use App\Modules\Central\Services\PlanService;
 use App\Modules\Central\Services\TenantProvisioner;
 use App\Modules\Central\Services\TenantService;
+use App\Modules\Core\Contracts\TenantPlanLimits;
 use App\Modules\Core\Support\ModuleServiceProvider;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Support\Facades\Gate;
@@ -24,6 +26,7 @@ final class CentralServiceProvider extends ModuleServiceProvider
         $this->app->singleton(TenantProvisioner::class);
         $this->app->singleton(TenantService::class);
         $this->app->singleton(PlanService::class);
+        $this->app->singleton(TenantPlanLimits::class, CurrentTenantPlanLimits::class);
     }
 
     public function boot(): void

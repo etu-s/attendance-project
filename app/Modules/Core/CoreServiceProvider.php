@@ -19,6 +19,7 @@ use App\Modules\Core\Services\SettingsService;
 use App\Modules\Core\Settings\SettingDefinition;
 use App\Modules\Core\Settings\SettingsRegistry;
 use App\Modules\Core\Support\ModuleServiceProvider;
+use App\Modules\Core\Support\TenantClock;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\Relation;
@@ -35,6 +36,7 @@ final class CoreServiceProvider extends ModuleServiceProvider
         $this->app->singleton(SettingsService::class);
         $this->app->singleton(AuditLogger::class);
         $this->app->singleton(DatabaseBackupService::class);
+        $this->app->singleton(TenantClock::class);
     }
 
     public function boot(): void

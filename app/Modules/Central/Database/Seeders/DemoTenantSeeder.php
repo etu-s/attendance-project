@@ -11,7 +11,8 @@ use App\Modules\Core\Tenancy\TenantProvisioningData;
 use Illuminate\Database\Seeder;
 
 /**
- * Local-only demo tenant at http://acme.localhost:5173 with its Tenant Admin.
+ * Local-only demo tenant at http://acme.localhost:5173 with its Tenant Admin
+ * and demo organization data (departments, locations, groups, employees).
  * Credentials come from config('ams.seed') (SEED_DEMO_ADMIN_* in .env) (defaults in .env.example).
  */
 final class DemoTenantSeeder extends Seeder
@@ -22,7 +23,7 @@ final class DemoTenantSeeder extends Seeder
             return;
         }
 
-        $provisioner->provision(new TenantProvisioningData(
+        $tenant = $provisioner->provision(new TenantProvisioningData(
             name: 'Acme Corporation',
             subdomain: 'acme',
             planId: (int) Plan::query()->where('slug', 'business')->value('id'),
@@ -31,5 +32,7 @@ final class DemoTenantSeeder extends Seeder
             adminEmail: (string) config('ams.seed.demo_admin_email'),
             adminPassword: (string) config('ams.seed.demo_admin_password'),
         ));
+
+        $tenant->run(fn () => $this->call(DemoOrganizationSeeder::class));
     }
 }

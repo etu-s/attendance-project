@@ -10,10 +10,12 @@ use App\Modules\Core\Exceptions\BusinessRuleException;
 use App\Modules\Core\Services\AuditLogger;
 use App\Modules\Core\Support\Search;
 use App\Modules\Identity\Enums\UserStatus;
+use App\Modules\Identity\Events\UserDeleted;
 use App\Modules\Identity\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Business rules for tenant user accounts:
@@ -134,7 +136,81 @@ final class UserService
             // Device/API tokens die with the account; the role is kept for history.
             $user->tokens()->delete();
             $user->delete();
+
+            event(new UserDeleted((int) $user->getKey()));
         });
+    }
+
+    /**
+     * Blocks sign-in for a user (e.g. their employee record was terminated).
+     * Goes through update(), so the last-active-admin rule still applies.
+     */
+    public function deactivate(int $userId, User $actor): void
+    {
+        $user = User::query()->with('roles')->find($userId);
+
+        if ($user === null || ! $user->isActive()) {
+            return;
+        }
+
+        $this->update($user, ['status' => UserStatus::Inactive->value], $actor);
+    }
+
+    /**
+     * Display data for users referenced by other modules (managers, linked logins).
+     *
+     * @param  list<int>  $ids
+     * @return array<int, array{id: int, name: string, email: string, status: string}>
+     */
+    public function summaries(array $ids): array
+    {
+        if ($ids === []) {
+            return [];
+        }
+
+        return User::query()
+            ->whereKey(array_values(array_unique($ids)))
+            ->get(['id', 'name', 'email', 'status'])
+            ->mapWithKeys(fn (User $user) => [$user->id => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'status' => $user->status->value,
+            ]])
+            ->all();
+    }
+
+    /**
+     * Which of the given ids are existing, active (not deleted) users.
+     *
+     * @param  list<int>  $ids
+     * @return list<int>
+     */
+    public function activeIdsAmong(array $ids): array
+    {
+        if ($ids === []) {
+            return [];
+        }
+
+        return User::query()
+            ->whereKey(array_values(array_unique($ids)))
+            ->where('status', UserStatus::Active)
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+    }
+
+    /**
+     * For other modules that create logins (e.g. an employee's login): the
+     * email must not belong to any account, including deleted ones.
+     *
+     * @param  string  $field  the input field the error is reported on
+     */
+    public function assertEmailAvailable(string $email, string $field = 'email'): void
+    {
+        if (User::withTrashed()->where('email', mb_strtolower($email))->exists()) {
+            throw ValidationException::withMessages([$field => 'A login with this email already exists.']);
+        }
     }
 
     /**

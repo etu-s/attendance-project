@@ -3,6 +3,7 @@
 use App\Modules\Central\CentralServiceProvider;
 use App\Modules\Core\CoreServiceProvider;
 use App\Modules\Identity\IdentityServiceProvider;
+use App\Modules\Organization\OrganizationServiceProvider;
 use App\Providers\HorizonServiceProvider;
 use App\Providers\TenancyServiceProvider;
 
@@ -14,4 +15,5 @@ return [
     CoreServiceProvider::class,
     CentralServiceProvider::class,
     IdentityServiceProvider::class,
+    OrganizationServiceProvider::class,
 ];
