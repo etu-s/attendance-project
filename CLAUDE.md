@@ -158,6 +158,7 @@ php artisan horizon                  # Linux only (needs pcntl); on Windows use:
 php artisan reverb:start             # installed, not configured yet
 php artisan punches:simulate --tenant=acme   # simulated punches from real schedules (--http --key=... via the API)
 php artisan attendance:close-days    # re-evaluate recent days (scheduled every 15 min)
+php artisan leave:accrue             # leave grants, accruals, carry-forward, expiry (scheduled hourly, idempotent)
 php artisan schedule:work            # run the scheduler locally
 composer test          # Pest
 ./vendor/bin/pint      # format
@@ -199,7 +200,7 @@ npm run build
 | 3   | Timetable & Shifts                  | Approved (2026-10-21) |
 | 4   | Scheduling                          | Approved (2026-10-21) |
 | 5   | Punch Ingestion & Attendance Engine | Approved (2026-10-21) |
-| 6   | Leave Management                    | Not started |
+| 6   | Leave Management                    | Approved (2026-10-27) |
 | 7   | Overtime Management                 | Not started |
 | 8   | Reports & Analytics                 | Not started |
 | 9   | Hardening                           | Not started |

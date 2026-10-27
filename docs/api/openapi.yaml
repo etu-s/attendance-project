@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: AMS API
-  version: 0.5.0
+  version: 0.6.0
   description: |
     Multi-tenant Attendance Management System. JSON only, versioned under `/api/v1`.
 
@@ -44,6 +44,7 @@ tags:
   - name: Timetables
   - name: Scheduling
   - name: Attendance
+  - name: Leave
 
 paths:
   /sanctum/csrf-cookie:
@@ -1343,6 +1344,126 @@ paths:
       requestBody: { content: { application/json: { schema: { type: object, properties: { note: { type: [string, 'null'], maxLength: 255 } } } } } }
       responses: { '200': { description: OK }, '403': { description: 'correction_own' }, '409': { description: 'correction_decided' } }
 
+  # ---------------------------------------------------------------- leave (Module 6)
+  /api/v1/leave-types:
+    get:
+      tags: [Leave]
+      summary: Active leave types (anyone with leave.request, leave.view or leave.manage); ?all=1 adds inactive ones (leave.manage)
+      parameters: [{ name: all, in: query, schema: { type: boolean } }]
+      responses: { '200': { description: OK, content: { application/json: { schema: { type: object, properties: { data: { type: array, items: { $ref: '#/components/schemas/LeaveType' } } } } } } } }
+    post:
+      tags: [Leave]
+      summary: Create a leave type (leave.manage)
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/LeaveTypeInput' } } } }
+      responses: { '201': { description: Created }, '422': { $ref: '#/components/responses/ValidationError' } }
+  /api/v1/leave-types/{leaveType}:
+    parameters: [{ name: leaveType, in: path, required: true, schema: { type: integer } }]
+    put:
+      tags: [Leave]
+      summary: Update a leave type (partial); applies from now on
+      requestBody: { content: { application/json: { schema: { $ref: '#/components/schemas/LeaveTypeInput' } } } }
+      responses: { '200': { description: OK }, '422': { $ref: '#/components/responses/ValidationError' } }
+    delete:
+      tags: [Leave]
+      summary: Delete a type never requested and without ledger entries
+      responses: { '204': { description: Deleted }, '409': { description: 'leave_type_in_use: deactivate instead' } }
+
+  /api/v1/leave-requests:
+    get:
+      tags: [Leave]
+      summary: Leave requests of the viewer's employees (leave.request or leave.view)
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PerPage'
+        - { name: sort, in: query, schema: { type: string, enum: [start_date, -start_date, created_at, -created_at], default: -start_date } }
+        - { name: search, in: query, schema: { type: string }, description: Employee name or code }
+        - { name: status, in: query, schema: { type: string, enum: [pending, approved, rejected, cancelled] } }
+        - { name: leave_type_id, in: query, schema: { type: integer } }
+        - { name: employee_id, in: query, schema: { type: integer } }
+        - { name: department_id, in: query, schema: { type: integer }, description: Current department, incl. sub-departments }
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+        - { name: mine, in: query, schema: { type: boolean }, description: Only the viewer's own }
+      responses: { '200': { description: OK, content: { application/json: { schema: { type: object, properties: { data: { type: array, items: { $ref: '#/components/schemas/LeaveRequest' } }, meta: { $ref: '#/components/schemas/PaginationMeta' } } } } } } }
+    post:
+      tags: [Leave]
+      summary: Request leave (leave.request, visible employee)
+      description: |
+        Counts scheduled working days only. Refused when it overlaps active leave (opposite halves are fine), has
+        no working days, or the balance would go below the type's negative limit. Entered by HR / a Tenant Admin for
+        someone else: approved at once (ledger debit, LeaveChanged).
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/LeaveRequestInput' } } } }
+      responses: { '201': { description: Created }, '403': { $ref: '#/components/responses/Forbidden' }, '422': { $ref: '#/components/responses/ValidationError' } }
+  /api/v1/leave-requests/preview:
+    post:
+      tags: [Leave]
+      summary: Counted days and the balance after, without saving
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/LeaveRequestInput' } } } }
+      responses: { '200': { description: OK, content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/LeavePreview' } } } } } } }
+  /api/v1/leave-requests/{leaveRequest}:
+    parameters: [{ name: leaveRequest, in: path, required: true, schema: { type: integer } }]
+    get: { tags: [Leave], summary: One request with its counted days, responses: { '200': { description: OK } } }
+  /api/v1/leave-requests/{leaveRequest}/approve:
+    parameters: [{ name: leaveRequest, in: path, required: true, schema: { type: integer } }]
+    post:
+      tags: [Leave]
+      summary: Approve (leave.approve; never own); re-checks the balance, debits the ledger, fires LeaveChanged
+      requestBody: { content: { application/json: { schema: { type: object, properties: { note: { type: [string, 'null'], maxLength: 255 } } } } } }
+      responses: { '200': { description: OK }, '403': { description: 'leave_own / leave_forbidden' }, '409': { description: leave_decided }, '422': { description: leave_balance } }
+  /api/v1/leave-requests/{leaveRequest}/reject:
+    parameters: [{ name: leaveRequest, in: path, required: true, schema: { type: integer } }]
+    post:
+      tags: [Leave]
+      summary: Reject (same rules as approve)
+      requestBody: { content: { application/json: { schema: { type: object, properties: { note: { type: [string, 'null'], maxLength: 255 } } } } } }
+      responses: { '200': { description: OK }, '403': { description: Not allowed }, '409': { description: leave_decided } }
+  /api/v1/leave-requests/{leaveRequest}/cancel:
+    parameters: [{ name: leaveRequest, in: path, required: true, schema: { type: integer } }]
+    post:
+      tags: [Leave]
+      summary: Cancel; approved leave is credited back
+      description: Pending or approved-not-started — the requester, the employee or an approver. Started/past approved leave — leave.manage only.
+      responses: { '200': { description: OK }, '403': { description: leave_not_cancellable }, '409': { description: Already closed } }
+
+  /api/v1/leave-calendar:
+    get:
+      tags: [Leave]
+      summary: Pending and approved leave overlapping a range, with counted days (leave.view, at most 62 days)
+      parameters:
+        - { name: from, in: query, required: true, schema: { type: string, format: date } }
+        - { name: to, in: query, required: true, schema: { type: string, format: date } }
+        - { name: department_id, in: query, schema: { type: integer } }
+      responses: { '200': { description: OK, content: { application/json: { schema: { type: object, properties: { data: { type: array, items: { $ref: '#/components/schemas/LeaveRequest' } } } } } } } }
+
+  /api/v1/employees/{employee}/leave-balances:
+    parameters: [{ name: employee, in: path, required: true, schema: { type: integer } }]
+    get:
+      tags: [Leave]
+      summary: Balances per type for a leave year (leave.view, visible employee; default current year)
+      parameters: [{ name: year, in: query, schema: { type: integer } }]
+      responses: { '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/LeaveBalances' } } } } }
+  /api/v1/employees/{employee}/leave-ledger:
+    parameters: [{ name: employee, in: path, required: true, schema: { type: integer } }]
+    get:
+      tags: [Leave]
+      summary: Ledger entries of a leave year (leave.view, visible employee)
+      parameters: [{ name: year, in: query, schema: { type: integer } }]
+      responses: { '200': { description: OK, content: { application/json: { schema: { type: object, properties: { leave_year: { type: integer }, data: { type: array, items: { $ref: '#/components/schemas/LeaveLedgerEntry' } } } } } } } }
+  /api/v1/me/leave-balances:
+    get:
+      tags: [Leave]
+      summary: The signed-in employee's balances (404 when the login has no employee)
+      parameters: [{ name: year, in: query, schema: { type: integer } }]
+      responses: { '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/LeaveBalances' } } } }, '404': { description: Not linked } }
+  /api/v1/leave-adjustments:
+    post:
+      tags: [Leave]
+      summary: Manual credit (+) or debit (−) with a reason (leave.manage); refused for unlimited types
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [employee_id, leave_type_id, days, reason], properties: { employee_id: { type: integer }, leave_type_id: { type: integer }, days: { type: number, multipleOf: 0.5, description: Non-zero }, leave_year: { type: integer, description: Default current }, reason: { type: string, minLength: 3, maxLength: 255 } } } } }
+      responses: { '201': { description: Created, content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/LeaveLedgerEntry' } } } } } }, '422': { $ref: '#/components/responses/ValidationError' } }
+
 components:
   securitySchemes:
     PunchSourceKey:
@@ -1844,9 +1965,11 @@ components:
         employee_id: { type: integer }
         employee: { type: object, description: On lists and the detail }
         work_date: { type: string, format: date }
-        status: { type: string, enum: [present, late, early_leave, late_early, incomplete, absent, in_progress, holiday, rest, day_off, unscheduled, not_employed] }
+        status: { type: string, enum: [present, late, early_leave, late_early, incomplete, absent, in_progress, on_leave, holiday, rest, day_off, unscheduled, not_employed] }
         timezone: { type: string }
         holiday_name: { type: [string, 'null'] }
+        leave_name: { type: [string, 'null'], description: Approved leave on the day (Module 6) }
+        leave_portion: { type: [string, 'null'], enum: [full, first_half, second_half, null] }
         schedule_source: { type: [string, 'null'], enum: [temporary, employee, group, department, organization, null] }
         shift_id: { type: [integer, 'null'] }
         department_id: { type: [integer, 'null'], description: Department on that day }
@@ -1858,7 +1981,7 @@ components:
         late_minutes: { type: integer }
         early_leave_minutes: { type: integer }
         unmatched_punches: { type: integer, description: Punches outside every window on a working day (not counted) }
-        flags: { type: array, items: { type: string, enum: [missing_in, missing_out, missed_period, below_minimum, off_day_work] } }
+        flags: { type: array, items: { type: string, enum: [missing_in, missing_out, missed_period, below_minimum, off_day_work, half_day_leave] } }
         calculated_at: { type: string, format: date-time, description: When the result last changed }
         periods:
           type: array
@@ -1885,3 +2008,103 @@ components:
         decision_note: { type: [string, 'null'] }
         created_at: { type: string, format: date-time }
         can_decide: { type: boolean, description: Whether the viewer may approve or reject it }
+    # ---------------------------------------------------------------- Module 6
+    LeaveType:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        code: { type: string }
+        color: { type: [string, 'null'] }
+        is_paid: { type: boolean }
+        accrual: { type: string, enum: [none, yearly, monthly] }
+        entitlement_days: { type: number }
+        carry_forward_max_days: { type: [number, 'null'], description: null = nothing carries over }
+        negative_limit_days: { type: number }
+        unlimited: { type: boolean, description: No balance kept or checked }
+        is_active: { type: boolean }
+    LeaveTypeInput:
+      type: object
+      description: Amounts in days, half-day steps. Unlimited types drop accrual, entitlement and carry-over.
+      properties:
+        name: { type: string, maxLength: 80 }
+        code: { type: string, maxLength: 20, pattern: '^[A-Za-z0-9_-]+$' }
+        color: { type: [string, 'null'], pattern: '^#[0-9a-fA-F]{6}$' }
+        is_paid: { type: boolean }
+        accrual: { type: string, enum: [none, yearly, monthly] }
+        entitlement_days: { type: number, multipleOf: 0.5 }
+        carry_forward_max_days: { type: [number, 'null'], multipleOf: 0.5 }
+        negative_limit_days: { type: number, multipleOf: 0.5 }
+        unlimited: { type: boolean }
+        is_active: { type: boolean }
+    LeaveRequestInput:
+      type: object
+      required: [employee_id, leave_type_id, start_date, end_date]
+      properties:
+        employee_id: { type: integer }
+        leave_type_id: { type: integer }
+        start_date: { type: string, format: date }
+        end_date: { type: string, format: date }
+        half_start: { type: boolean, description: First day counts its second half only }
+        half_end: { type: boolean, description: Last day counts its first half only }
+        reason: { type: [string, 'null'], maxLength: 500 }
+    LeaveRequest:
+      type: object
+      properties:
+        id: { type: integer }
+        employee: { type: object }
+        type: { type: object, properties: { id: { type: integer }, name: { type: string }, code: { type: string }, color: { type: [string, 'null'] }, is_paid: { type: boolean }, unlimited: { type: boolean } } }
+        start_date: { type: string, format: date }
+        end_date: { type: string, format: date }
+        half_start: { type: boolean }
+        half_end: { type: boolean }
+        days: { type: number, description: Counted (scheduled working) days }
+        reason: { type: [string, 'null'] }
+        status: { type: string, enum: [pending, approved, rejected, cancelled] }
+        requested_by: { type: [object, 'null'] }
+        decided_by: { type: [object, 'null'] }
+        decided_at: { type: [string, 'null'], format: date-time }
+        decision_note: { type: [string, 'null'] }
+        cancelled_at: { type: [string, 'null'], format: date-time }
+        created_at: { type: string, format: date-time }
+        counted_days: { type: array, description: On show and the calendar, items: { type: object, properties: { date: { type: string, format: date }, portion: { type: string, enum: [full, first_half, second_half] } } } }
+        can_decide: { type: boolean }
+        can_cancel: { type: boolean }
+    LeavePreview:
+      type: object
+      properties:
+        days: { type: number }
+        counted_days: { type: array, items: { type: object, properties: { date: { type: string, format: date }, portion: { type: string } } } }
+        years: { type: array, items: { type: object, properties: { leave_year: { type: integer }, days: { type: number }, available: { type: [number, 'null'] }, after: { type: [number, 'null'] } } } }
+        problem: { type: [string, 'null'], description: Why it would be refused (no working days, not enough balance) }
+    LeaveBalances:
+      type: object
+      properties:
+        leave_year: { type: integer }
+        year_start: { type: string, format: date }
+        year_end: { type: string, format: date }
+        data:
+          type: array
+          items:
+            type: object
+            properties:
+              type: { type: object }
+              entitled: { type: number, description: Grants + accruals + carry-forward }
+              used: { type: number, description: Requests net of cancellations and recounts }
+              adjusted: { type: number }
+              expired: { type: number }
+              balance: { type: number }
+              pending: { type: number }
+              available: { type: [number, 'null'], description: null for unlimited types }
+    LeaveLedgerEntry:
+      type: object
+      properties:
+        id: { type: integer }
+        type: { type: object }
+        leave_year: { type: integer }
+        kind: { type: string, enum: [grant, accrual, carry_forward, expiry, request, cancellation, recount, adjustment] }
+        days: { type: number, description: Positive credit, negative debit }
+        leave_request_id: { type: [integer, 'null'] }
+        reason: { type: [string, 'null'] }
+        created_by: { type: [object, 'null'] }
+        created_at: { type: string, format: date-time }

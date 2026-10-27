@@ -72,7 +72,7 @@ before the next starts (see [§18](#18-workflow-quality-gates-and-git)).
 | 3   | Timetable & Shifts                  | Approved 2026-10-21                              | [timetable.md](modules/timetable.md)             |
 | 4   | Scheduling                          | Approved 2026-10-21                              | [scheduling.md](modules/scheduling.md)           |
 | 5   | Punch Ingestion & Attendance Engine | Approved 2026-10-21                              | [attendance.md](modules/attendance.md)           |
-| 6   | Leave Management                    | Not started                                      |                                                  |
+| 6   | Leave Management                    | Approved 2026-10-27                              | [leave.md](modules/leave.md)                     |
 | 7   | Overtime Management                 | Not started                                      |                                                  |
 | 8   | Reports & Analytics                 | Not started                                      |                                                  |
 | 9   | Hardening                           | Not started                                      |                                                  |
@@ -201,7 +201,7 @@ morph map, registers policies, permissions, settings and event listeners). See
 [TimetableServiceProvider.php](../app/Modules/Timetable/TimetableServiceProvider.php).
 
 Current provider order (`bootstrap/providers.php`): Tenancy, Horizon, Core, Central, Identity, Organization,
-Timetable, Scheduling, Attendance. Keep new modules after the modules they depend on.
+Timetable, Scheduling, Attendance, Leave. Keep new modules after the modules they depend on.
 
 ### 5.2 How modules talk to each other
 
@@ -226,6 +226,8 @@ Timetable, Scheduling, Attendance. Keep new modules after the modules they depen
 | `ScheduleChanged`                | Scheduling event | Fired after commit for every assignment, temporary-schedule or holiday change (scope + date range); attendance recalculation listens |
 | `AttendanceCalculator::recalculate($ids, $from, $to)` | Attendance | Rebuilds attendance days (queued via `RecalculateAttendance`; one writer per tenant). Leave and overtime will feed and read it |
 | `AttendanceQuery` | Attendance | Visibility-scoped reads of attendance days and per-status counts (for Reports) |
+| `LeaveCalendar` (contract) / `LeaveChanged` (event) | Core ← Leave | Approved leave per employee and day, and its changes; Attendance consumes both without depending on Leave. Core binds an empty default |
+| `LeaveBalanceService` / `LeaveLedger` | Leave | Balances are read from (and written to) the append-only ledger only |
 
 ### 5.3 Layering inside a module
 
@@ -603,16 +605,31 @@ Punch sources (key shown once), employee Attendance tab, My attendance; the side
 
 Full detail: [modules/attendance.md](modules/attendance.md).
 
+### 12.6 Module 6 — Leave Management (`Leave`) — *approved 2026-10-27*
+
+**Balances are a ledger:** `leave_ledger` is append-only (triggers); a balance is the sum of a leave year's
+entries (grant, accrual, carry_forward, expiry, request, cancellation, recount, adjustment), stored in whole
+half-days. `leave:accrue` (hourly, idempotent via a unique period key) writes grants (prorated for joiners),
+monthly accruals and the year end (carry up to the cap, the rest expires; negative balances carry in full).
+
+**Requests** count scheduled working days only (`ScheduleResolver`): holidays, rest days and days off are free;
+half days at either end; no overlaps except opposite halves; balance down to the type's negative limit; single-step
+approval (managers for their people or HR, never one's own; HR entries approved at once); cancellation credits back.
+Schedule or holiday changes recount active requests (`recount` entries).
+
+**Attendance:** Leave implements Core's `LeaveCalendar` and fires Core's `LeaveChanged`; full days are `on_leave`,
+half days excuse that half and evaluate the other from the day's midpoint.
+
+**Screens:** My leave, Leave requests, Leave calendar, Leave types, employee Leave tab; "On leave" in attendance.
+
+Full detail: [modules/leave.md](modules/leave.md).
+
 ---
 
 ## 13. Planned modules and their domain rules
 
 These rules are fixed by CLAUDE.md and must be honoured when the modules are built. Each still gets its own
 plan and approval.
-
-**Module 6 — Leave.** Balance is a **ledger** (every credit/debit is a transaction; never mutate a balance).
-Approved leave, holidays and weekly offs feed attendance status. Test leave overlapping holidays and
-negative balances.
 
 **Module 7 — Overtime.** Calculated from attendance records, then approved. OT rules/multipliers in settings.
 
@@ -723,6 +740,7 @@ the origin to `SANCTUM_STATEFUL_DOMAINS`.
 | `php artisan route:list --path=api --except-vendor` | live endpoint list |
 | `php artisan punches:simulate --tenant=acme` | punches from real schedules (`--http --key=…` posts through the API) |
 | `php artisan attendance:close-days` | re-evaluate recent days (scheduled every 15 minutes) |
+| `php artisan leave:accrue` | leave grants, accruals, carry-forward, expiry (scheduled hourly, idempotent) |
 | `php artisan schedule:work` | run the scheduler locally |
 | `composer test` | Pest |
 | `./vendor/bin/pint` / `--test` | format / check PHP style |
@@ -857,6 +875,7 @@ local dev.
 - `ScheduleChanged` for a department/group/location recalculates everyone employed in the range (unchanged days are skipped).
 - New employee codes are not checked against punch identifiers (the code wins for new punches).
 - A pending punch correction cannot be withdrawn by its requester.
+- Leave: half days only (no hourly leave), no attachments yet (Hardening), no automatic cancellation of future leave on termination, year-end carry is not redone for late changes in a closed leave year.
 - Temporary schedules are per employee only; moving holidays (Eid, etc.) are entered each year.
 - Schedule rows whose department/group/employee was deleted show as "Deleted" and are ignored.
 - OpenAPI spec is hand-maintained; keep it in sync with routes and resources.

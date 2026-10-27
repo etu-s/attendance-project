@@ -171,5 +171,12 @@ visibility/recalculate/isolation; corrections (employee/manager/HR flows, own-re
 - A pending correction cannot be withdrawn by its requester (reject it instead).
 - Times on the Corrections and Punch log lists are shown in the workspace timezone; the day drawer uses the
   employee's location timezone.
-- Leave (Module 6) will add an `on_leave` status; overtime (Module 7) will read worked minutes and
-  off-day/holiday work from these records.
+- Overtime (Module 7) will read worked minutes and off-day/holiday work from these records.
+
+## Leave (added with Module 6)
+
+Approved leave arrives through Core's `LeaveCalendar` contract and `LeaveChanged` event (see
+[leave.md](leave.md)). On a working day, a full day of leave is `on_leave` (punches kept, minutes recorded, no
+late/early, scheduled 0); a half day excuses that half and evaluates the other from the day's midpoint (flag
+`half_day_leave`, scheduled and minimum work halved). Holidays inside leave stay holidays. Days record
+`leave_name` and `leave_portion`.

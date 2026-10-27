@@ -4,6 +4,20 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ## [Unreleased]
 
+### Added — Module 6: Leave Management
+
+- Leave module (`app/Modules/Leave`): leave types (paid/unpaid, yearly grant or monthly accrual, carry-forward
+  cap, negative limit, unlimited), requests in full and half days with a single approval step, cancellation and
+  a team calendar.
+- Balances are an append-only ledger (SQLite triggers): grants, accruals, carry-forward, expiry, request debits,
+  cancellation credits, recounts and HR adjustments. Only scheduled working days count; holidays and days off
+  are free. `php artisan leave:accrue` (scheduled hourly, idempotent) handles proration and the year end.
+- Approved leave feeds attendance through Core's `LeaveCalendar` contract and `LeaveChanged` event: full days are
+  `on_leave`; half days excuse that half and evaluate the other from the day's midpoint. Schedule and holiday
+  changes recount leave automatically.
+- SPA: My leave, Leave requests, Leave calendar, Leave types, employee Leave tab; "On leave" in attendance.
+- 27 new Pest tests (379 total); OpenAPI spec v0.6.0.
+
 ### Added — Module 5: Punch Ingestion & Attendance Engine
 
 - Attendance module (`app/Modules/Attendance`): `POST /punches` and `/punches/batch` with per-source keys
