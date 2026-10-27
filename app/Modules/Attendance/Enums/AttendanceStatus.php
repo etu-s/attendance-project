@@ -21,6 +21,8 @@ enum AttendanceStatus: string
     case Absent = 'absent';
     /** The day's last punch window is still open. */
     case InProgress = 'in_progress';
+    /** A full day of approved leave (half days are evaluated, flag half_day_leave). */
+    case OnLeave = 'on_leave';
     case Holiday = 'holiday';
     case Rest = 'rest';
     case DayOff = 'day_off';

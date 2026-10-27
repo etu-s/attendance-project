@@ -16,6 +16,7 @@ use App\Modules\Attendance\Support\AttendanceRules;
 use App\Modules\Attendance\Support\DayResult;
 use App\Modules\Attendance\Support\PunchInput;
 use App\Modules\Core\Casts\LocalDate;
+use App\Modules\Core\Contracts\LeaveCalendar;
 use App\Modules\Core\Services\SettingsService;
 use App\Modules\Organization\Models\Employee;
 use App\Modules\Organization\Models\EmployeeAssignment;
@@ -51,6 +52,7 @@ final class AttendanceCalculator
         private readonly DayEvaluator $evaluator,
         private readonly AssignmentService $assignments,
         private readonly SettingsService $settings,
+        private readonly LeaveCalendar $leave,
     ) {}
 
     /**
@@ -119,6 +121,7 @@ final class AttendanceCalculator
         $ids = $employees->pluck('id')->map(fn ($id) => (int) $id)->all();
         $resolved = $this->resolver->forEmployees($employees, $from->subDay(), $to->addDay());
         $placements = $this->assignments->forEmployees($ids, $from, $to);
+        $leave = $this->leave->forEmployees($ids, $from, $to);
         $punches = $this->punches($ids, $from, $to);
         $existing = AttendanceDay::query()
             ->whereIn('employee_id', $ids)
@@ -147,7 +150,7 @@ final class AttendanceCalculator
                 continue;
             }
 
-            $results = $this->evaluator->evaluate($days, $punches[$employee->id] ?? [], $dates, $now, $rules);
+            $results = $this->evaluator->evaluate($days, $punches[$employee->id] ?? [], $dates, $now, $rules, $leave[$employee->id] ?? []);
             $written += $this->write(
                 $employee->id,
                 $results,
@@ -299,6 +302,8 @@ final class AttendanceCalculator
             'schedule_source' => $day->source,
             'timezone' => $day->timezone,
             'holiday_name' => $day->holiday,
+            'leave_name' => $result->leave?->typeName,
+            'leave_portion' => $result->leave?->portion->value,
             'first_in_at' => $format($result->firstIn),
             'last_out_at' => $format($result->lastOut),
             'scheduled_minutes' => $result->scheduledMinutes,

@@ -30,6 +30,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string|null $schedule_source
  * @property string $timezone
  * @property string|null $holiday_name
+ * @property string|null $leave_name
+ * @property string|null $leave_portion
  * @property CarbonImmutable|null $first_in_at
  * @property CarbonImmutable|null $last_out_at
  * @property int $scheduled_minutes

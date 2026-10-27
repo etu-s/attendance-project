@@ -35,6 +35,8 @@ class AttendanceDayResource extends JsonResource
             'status' => $this->status->value,
             'timezone' => $this->timezone,
             'holiday_name' => $this->holiday_name,
+            'leave_name' => $this->leave_name,
+            'leave_portion' => $this->leave_portion,
             'schedule_source' => $this->schedule_source,
             'shift_id' => $this->shift_id,
             'department_id' => $this->department_id,

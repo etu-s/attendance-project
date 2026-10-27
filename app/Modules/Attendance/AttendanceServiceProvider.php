@@ -6,6 +6,7 @@ namespace App\Modules\Attendance;
 
 use App\Modules\Attendance\Console\CloseAttendanceDaysCommand;
 use App\Modules\Attendance\Console\SimulatePunchesCommand;
+use App\Modules\Attendance\Listeners\RecalculateOnLeaveChange;
 use App\Modules\Attendance\Listeners\RecalculateOnScheduleChange;
 use App\Modules\Attendance\Models\EmployeePunchIdentifier;
 use App\Modules\Attendance\Models\PunchCorrection;
@@ -22,6 +23,7 @@ use App\Modules\Attendance\Services\PunchSourceService;
 use App\Modules\Attendance\Services\RawPunchQuery;
 use App\Modules\Core\Enums\RoleName;
 use App\Modules\Core\Enums\SettingType;
+use App\Modules\Core\Events\LeaveChanged;
 use App\Modules\Core\Permissions\PermissionCatalog;
 use App\Modules\Core\Settings\SettingDefinition;
 use App\Modules\Core\Settings\SettingsRegistry;
@@ -67,6 +69,7 @@ final class AttendanceServiceProvider extends ModuleServiceProvider
         ]);
 
         Event::listen(ScheduleChanged::class, RecalculateOnScheduleChange::class);
+        Event::listen(LeaveChanged::class, RecalculateOnLeaveChange::class);
 
         if ($this->app->runningInConsole()) {
             $this->commands([SimulatePunchesCommand::class, CloseAttendanceDaysCommand::class]);

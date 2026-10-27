@@ -21,6 +21,8 @@ final readonly class PeriodResult
         public int $breakMinutes,
         public int $lateMinutes,
         public int $earlyLeaveMinutes,
+        /** Inside a half-day leave: not required. */
+        public bool $excused = false,
     ) {}
 
     public function isMissing(): bool

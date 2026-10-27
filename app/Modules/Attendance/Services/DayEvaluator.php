@@ -12,6 +12,8 @@ use App\Modules\Attendance\Support\DayResult;
 use App\Modules\Attendance\Support\PeriodResult;
 use App\Modules\Attendance\Support\PunchInput;
 use App\Modules\Attendance\Support\PunchUse;
+use App\Modules\Core\Enums\DayPortion;
+use App\Modules\Core\Support\LeaveDay;
 use App\Modules\Scheduling\Enums\DayStatus;
 use App\Modules\Scheduling\Support\ResolvedDay;
 use App\Modules\Timetable\Enums\BreakKind;
@@ -55,16 +57,19 @@ final class DayEvaluator
      * @param  array<string, ResolvedDay>  $days  every date to evaluate plus one day either side
      * @param  list<PunchInput>  $punches  the employee's punches around those dates, any order
      * @param  list<string>  $dates  work dates to evaluate (keys of $days)
+     * @param  array<string, LeaveDay>  $leave  approved leave by work date
      * @return array<string, DayResult>
      */
-    public function evaluate(array $days, array $punches, array $dates, CarbonImmutable $now, AttendanceRules $rules): array
+    public function evaluate(array $days, array $punches, array $dates, CarbonImmutable $now, AttendanceRules $rules, array $leave = []): array
     {
         $windows = $this->windows($days);
         $placed = $this->place($punches, $windows, $days, $rules);
 
         $results = [];
         foreach ($dates as $date) {
-            $results[$date] = $this->day($days[$date], $placed[$date] ?? [], $windows[$date] ?? [], $now, $rules);
+            // Leave only matters on a working day; holidays and rest days stay what they are.
+            $dayLeave = $days[$date]->status === DayStatus::Working ? ($leave[$date] ?? null) : null;
+            $results[$date] = $this->day($days[$date], $placed[$date] ?? [], $windows[$date] ?? [], $now, $rules, $dayLeave);
         }
 
         return $results;
@@ -183,8 +188,11 @@ final class DayEvaluator
      * @param  list<array{punch: PunchInput, role: PunchRole|null, period: int|null}>  $placed
      * @param  list<array{index: int, period: ScheduledPeriod, rules: array<string, int>, opens: int, closes: int}>  $windows
      */
-    private function day(ResolvedDay $day, array $placed, array $windows, CarbonImmutable $now, AttendanceRules $rules): DayResult
+    private function day(ResolvedDay $day, array $placed, array $windows, CarbonImmutable $now, AttendanceRules $rules, ?LeaveDay $leave): DayResult
     {
+        $halfLeave = $leave !== null && $leave->portion !== DayPortion::Full ? $leave->portion : null;
+        $midpoint = $halfLeave !== null ? $this->midpoint($windows) : null;
+
         $uses = [];
         $byPeriod = [];
         $loose = [];
@@ -201,12 +209,12 @@ final class DayEvaluator
 
         $periods = [];
         foreach ($windows as $window) {
-            [$result, $periodUses] = $this->period($window, $byPeriod[$window['index']] ?? [], $rules);
+            [$result, $periodUses] = $this->period($window, $byPeriod[$window['index']] ?? [], $rules, $halfLeave, $midpoint);
             $periods[] = $result;
             array_push($uses, ...$periodUses);
         }
 
-        $flags = [];
+        $flags = $halfLeave !== null ? ['half_day_leave'] : [];
         $firstIn = null;
         $lastOut = null;
         $worked = 0;
@@ -248,9 +256,11 @@ final class DayEvaluator
             }
         }
 
-        $status = $this->status($day, $periods, $windows, $now, $worked, $flags);
+        // A full day of approved leave is leave, punches or not (they stay recorded for overtime).
+        $fullLeave = $leave !== null && $halfLeave === null;
+        $status = $fullLeave ? AttendanceStatus::OnLeave : $this->status($day, $periods, $windows, $now, $worked, $flags, $halfLeave !== null);
 
-        if ($day->status !== DayStatus::Working) {
+        if ($day->status !== DayStatus::Working || $fullLeave) {
             // Late/early only mean something when work was expected.
             $late = 0;
             $early = 0;
@@ -259,9 +269,12 @@ final class DayEvaluator
         usort($uses, fn (PunchUse $a, PunchUse $b) => [$a->punch->timestamp(), $a->punch->rawPunchId ?? PHP_INT_MAX]
             <=> [$b->punch->timestamp(), $b->punch->rawPunchId ?? PHP_INT_MAX]);
 
-        $scheduled = $day->status === DayStatus::Working
+        $scheduled = $day->status === DayStatus::Working && ! $fullLeave
             ? array_sum(array_map(fn (PeriodResult $p) => $this->scheduledMinutes($p->period), $periods))
             : 0;
+        if ($halfLeave !== null) {
+            $scheduled = intdiv($scheduled, 2);
+        }
 
         return new DayResult(
             $day,
@@ -276,7 +289,26 @@ final class DayEvaluator
             $early,
             $unmatched,
             array_values(array_unique($flags)),
+            $leave,
         );
+    }
+
+    /**
+     * The instant halfway through the day's scheduled time (first start to
+     * last end), where a half-day leave splits the day.
+     *
+     * @param  list<array{index: int, period: ScheduledPeriod, rules: array<string, int>, opens: int, closes: int}>  $windows
+     */
+    private function midpoint(array $windows): ?int
+    {
+        if ($windows === []) {
+            return null;
+        }
+
+        $start = min(array_map(fn (array $w) => $w['period']->startsAt->getTimestamp(), $windows));
+        $end = max(array_map(fn (array $w) => $w['period']->endsAt->getTimestamp(), $windows));
+
+        return intdiv($start + $end, 2);
     }
 
     /**
@@ -284,7 +316,7 @@ final class DayEvaluator
      * @param  list<array{index: int, period: ScheduledPeriod, rules: array<string, int>, opens: int, closes: int}>  $windows
      * @param  list<string>  $flags
      */
-    private function status(ResolvedDay $day, array $periods, array $windows, CarbonImmutable $now, int $worked, array &$flags): AttendanceStatus
+    private function status(ResolvedDay $day, array $periods, array $windows, CarbonImmutable $now, int $worked, array &$flags, bool $halfLeave): AttendanceStatus
     {
         $mapped = match ($day->status) {
             DayStatus::Working => null,
@@ -302,6 +334,12 @@ final class DayEvaluator
         // Until the last punch window closes the day can still change.
         if ($now->getTimestamp() < max(array_column($windows, 'closes'))) {
             return AttendanceStatus::InProgress;
+        }
+
+        // Periods inside the half-day leave are not required.
+        $periods = array_values(array_filter($periods, fn (PeriodResult $p) => ! $p->excused));
+        if ($periods === []) {
+            return AttendanceStatus::Present;
         }
 
         $missing = array_filter($periods, fn (PeriodResult $p) => $p->isMissing());
@@ -325,6 +363,9 @@ final class DayEvaluator
         }
 
         $minimum = array_sum(array_map(fn (PeriodResult $p) => (int) $p->period->timetable->min_work_minutes, $periods));
+        if ($halfLeave) {
+            $minimum = intdiv($minimum, 2);
+        }
         if ($minimum > 0 && $worked < $minimum) {
             // Below the timetable minimum counts as absent; worked minutes stay visible.
             $flags[] = 'below_minimum';
@@ -348,7 +389,7 @@ final class DayEvaluator
      * @param  list<PunchInput>  $punches  in time order
      * @return array{0: PeriodResult, 1: list<PunchUse>}
      */
-    private function period(array $window, array $punches, AttendanceRules $rules): array
+    private function period(array $window, array $punches, AttendanceRules $rules, ?DayPortion $halfLeave = null, ?int $midpoint = null): array
     {
         $period = $window['period'];
         $timetable = $period->timetable;
@@ -376,10 +417,25 @@ final class DayEvaluator
             $earlyUntil = $hasCore && $lateFrom !== null ? $lateFrom + (int) $timetable->core_duration_minutes * 60 : null;
         }
 
-        $late = $in !== null && $lateFrom !== null && $in->timestamp() > $lateFrom + $window['rules']['late_grace_minutes'] * 60
+        // Half-day leave: the leave half is excused; the expected start (first
+        // half off) or end (second half off) moves to the day's midpoint.
+        $excused = false;
+        $required = (int) $timetable->required_minutes;
+        if ($halfLeave !== null && $midpoint !== null) {
+            $excused = $halfLeave === DayPortion::FirstHalf ? $end <= $midpoint : $start >= $midpoint;
+            if ($halfLeave === DayPortion::FirstHalf && $lateFrom !== null) {
+                $lateFrom = max($lateFrom, $midpoint);
+            }
+            if ($halfLeave === DayPortion::SecondHalf && $earlyUntil !== null) {
+                $earlyUntil = min($earlyUntil, $midpoint);
+            }
+            $required = intdiv($required, 2);
+        }
+
+        $late = ! $excused && $in !== null && $lateFrom !== null && $in->timestamp() > $lateFrom + $window['rules']['late_grace_minutes'] * 60
             ? intdiv($in->timestamp() - $lateFrom, 60)
             : 0;
-        $early = $out !== null && $earlyUntil !== null && $out->timestamp() < $earlyUntil - $window['rules']['early_leave_grace_minutes'] * 60
+        $early = ! $excused && $out !== null && $earlyUntil !== null && $out->timestamp() < $earlyUntil - $window['rules']['early_leave_grace_minutes'] * 60
             ? intdiv($earlyUntil - $out->timestamp(), 60)
             : 0;
 
@@ -390,14 +446,13 @@ final class DayEvaluator
             $break = min($span, $this->unpaidBreakMinutes($period, $in->timestamp(), $out->timestamp()));
             $worked = $this->round($span - $break, $rules);
 
-            $required = (int) $timetable->required_minutes;
-            if ($flexible && $required > 0 && $worked < $required) {
+            if ($flexible && ! $excused && $required > 0 && $worked < $required) {
                 $early = max($early, $required - $worked);
             }
         }
 
         return [
-            new PeriodResult($window['index'], $period, $in?->at, $out?->at, $worked, $break, $late, $early),
+            new PeriodResult($window['index'], $period, $in?->at, $out?->at, $worked, $break, $late, $early, $excused),
             $uses,
         ];
     }

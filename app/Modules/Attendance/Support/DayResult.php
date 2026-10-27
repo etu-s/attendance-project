@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Attendance\Support;
 
 use App\Modules\Attendance\Enums\AttendanceStatus;
+use App\Modules\Core\Support\LeaveDay;
 use App\Modules\Scheduling\Support\ResolvedDay;
 use Carbon\CarbonImmutable;
 
@@ -32,6 +33,7 @@ final readonly class DayResult
         public int $earlyLeaveMinutes,
         public int $unmatchedPunches,
         public array $flags,
+        public ?LeaveDay $leave = null,
     ) {}
 
     public function hasPunches(): bool
