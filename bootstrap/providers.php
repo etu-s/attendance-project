@@ -4,6 +4,7 @@ use App\Modules\Attendance\AttendanceServiceProvider;
 use App\Modules\Central\CentralServiceProvider;
 use App\Modules\Core\CoreServiceProvider;
 use App\Modules\Identity\IdentityServiceProvider;
+use App\Modules\Leave\LeaveServiceProvider;
 use App\Modules\Organization\OrganizationServiceProvider;
 use App\Modules\Scheduling\SchedulingServiceProvider;
 use App\Modules\Timetable\TimetableServiceProvider;
@@ -22,4 +23,5 @@ return [
     TimetableServiceProvider::class,
     SchedulingServiceProvider::class,
     AttendanceServiceProvider::class,
+    LeaveServiceProvider::class,
 ];

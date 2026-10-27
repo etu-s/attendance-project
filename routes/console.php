@@ -10,3 +10,6 @@ Artisan::command('inspire', function () {
 
 // Turns finished working days without punches into absent / incomplete (Attendance module).
 Schedule::command('attendance:close-days')->everyFifteenMinutes()->withoutOverlapping();
+
+// Leave grants, monthly accruals, carry-forward and expiry (Leave module); idempotent.
+Schedule::command('leave:accrue')->hourly()->withoutOverlapping();

@@ -9,6 +9,7 @@ use App\Modules\Central\Models\Domain;
 use App\Modules\Central\Models\Plan;
 use App\Modules\Central\Services\TenantProvisioner;
 use App\Modules\Core\Tenancy\TenantProvisioningData;
+use App\Modules\Leave\Database\Seeders\DemoLeaveSeeder;
 use App\Modules\Organization\Database\Seeders\DemoOrganizationSeeder;
 use App\Modules\Scheduling\Database\Seeders\DemoSchedulingSeeder;
 use App\Modules\Timetable\Database\Seeders\DemoTimetableSeeder;
@@ -38,6 +39,10 @@ final class DemoTenantSeeder extends Seeder
             adminPassword: (string) config('ams.seed.demo_admin_password'),
         ));
 
-        $tenant->run(fn () => $this->call([DemoOrganizationSeeder::class, DemoTimetableSeeder::class, DemoSchedulingSeeder::class, DemoAttendanceSeeder::class]));
+        $tenant->run(fn () => $this->call([
+            DemoOrganizationSeeder::class, DemoTimetableSeeder::class, DemoSchedulingSeeder::class,
+            // Leave before punches, so the simulated week is evaluated with it.
+            DemoLeaveSeeder::class, DemoAttendanceSeeder::class,
+        ]));
     }
 }

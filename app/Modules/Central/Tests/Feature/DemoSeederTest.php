@@ -7,6 +7,8 @@ use App\Modules\Attendance\Models\PunchSource;
 use App\Modules\Central\Database\Seeders\DemoTenantSeeder;
 use App\Modules\Central\Database\Seeders\PlanSeeder;
 use App\Modules\Central\Models\Domain;
+use App\Modules\Leave\Models\LeaveRequest;
+use App\Modules\Leave\Models\LeaveType;
 use App\Modules\Organization\Models\Employee;
 use App\Modules\Scheduling\Models\Holiday;
 use App\Modules\Scheduling\Models\ScheduleAssignment;
@@ -34,7 +36,11 @@ it('provisions the local demo tenant with its demo data, once', function (): voi
             ->and(ScheduleAssignment::query()->count())->toBe(4)
             ->and(Holiday::query()->count())->toBe(7)
             ->and(PunchSource::query()->orderBy('name')->pluck('name')->all())->toBe(['Main entrance', 'Simulator'])
-            ->and(AttendanceDay::query()->count())->toBeGreaterThan(50);
+            ->and(AttendanceDay::query()->count())->toBeGreaterThan(50)
+            ->and(LeaveType::query()->count())->toBe(3)
+            ->and(LeaveRequest::query()->pluck('status')->map->value->sort()->values()->all())
+            ->toBe(['approved', 'approved', 'approved', 'pending', 'pending', 'rejected'])
+            ->and(AttendanceDay::query()->where('status', 'on_leave')->exists())->toBeTrue();
     });
 
     expect(Domain::query()->where('domain', 'acme')->count())->toBe(1);
