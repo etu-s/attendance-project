@@ -18,6 +18,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { EmployeeAttendanceTab } from '@/features/attendance/employee-attendance-tab'
+import { EmployeeLeaveTab } from '@/features/leave/employee-leave-tab'
 import { EmployeeScheduleTab } from '@/features/scheduling/employee-schedule-tab'
 import { useCan, useDisplayPreferences } from '@/features/tenant-auth/hooks'
 import { formatLocalDate, type DisplayPreferences } from '@/lib/format'
@@ -268,6 +269,7 @@ export function EmployeeDetailPage() {
           <TabsTrigger value="groups">Groups</TabsTrigger>
           {can('schedules.view') && <TabsTrigger value="schedule">Schedule</TabsTrigger>}
           {can('attendance.view') && <TabsTrigger value="attendance">Attendance</TabsTrigger>}
+          {can('leave.view') && <TabsTrigger value="leave">Leave</TabsTrigger>}
         </TabsList>
         <TabsContent value="details" className="pt-4">
           <Card>
@@ -300,6 +302,11 @@ export function EmployeeDetailPage() {
               employeeCode={employee.employee_code}
               employeeName={employee.full_name}
             />
+          </TabsContent>
+        )}
+        {can('leave.view') && (
+          <TabsContent value="leave" className="pt-4">
+            <EmployeeLeaveTab employeeId={employee.id} />
           </TabsContent>
         )}
       </Tabs>

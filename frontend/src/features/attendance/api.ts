@@ -11,6 +11,7 @@ export const attendanceStatuses = [
   'incomplete',
   'absent',
   'in_progress',
+  'on_leave',
   'holiday',
   'rest',
   'day_off',
@@ -37,6 +38,8 @@ export interface AttendanceDay {
   status: AttendanceStatus
   timezone: string
   holiday_name: string | null
+  leave_name: string | null
+  leave_portion: 'full' | 'first_half' | 'second_half' | null
   schedule_source: string | null
   shift_id: number | null
   department_id: number | null

@@ -78,6 +78,13 @@ function DayBody({
       <div className="flex flex-wrap items-center gap-2">
         <StatusBadge tone={attendanceStatusTone[day.status]}>{attendanceStatusLabel[day.status]}</StatusBadge>
         {day.holiday_name && <span className="text-status-holiday text-sm">{day.holiday_name}</span>}
+        {day.leave_name && (
+          <span className="text-status-leave text-sm">
+            {day.leave_name}
+            {day.leave_portion === 'first_half' && ' (morning)'}
+            {day.leave_portion === 'second_half' && ' (afternoon)'}
+          </span>
+        )}
         <span className="text-muted-foreground text-xs">Times in {zoneLabel(day.timezone)}</span>
       </div>
 

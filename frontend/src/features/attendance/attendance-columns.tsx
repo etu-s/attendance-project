@@ -51,6 +51,12 @@ export function useAttendanceColumns(
         <div className="flex flex-col items-start gap-1">
           <StatusBadge tone={attendanceStatusTone[d.status]}>{attendanceStatusLabel[d.status]}</StatusBadge>
           {d.holiday_name && <span className="text-status-holiday text-xs">{d.holiday_name}</span>}
+          {d.leave_name && (
+            <span className="text-status-leave text-xs">
+              {d.leave_name}
+              {d.leave_portion !== 'full' && ' (half day)'}
+            </span>
+          )}
         </div>
       ),
     },

@@ -12,7 +12,11 @@ function DaySummary({ day, prefs }: { day: AttendanceDay; prefs: DisplayPreferen
   return (
     <div className="space-y-0.5 text-xs">
       <p className="font-medium">
-        {day.status === 'holiday' && day.holiday_name ? day.holiday_name : attendanceStatusLabel[day.status]}
+        {day.status === 'holiday' && day.holiday_name
+          ? day.holiday_name
+          : day.status === 'on_leave' && day.leave_name
+            ? day.leave_name
+            : attendanceStatusLabel[day.status]}
       </p>
       {times && (
         <p className="tabular-nums">

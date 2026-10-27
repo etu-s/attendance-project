@@ -6,6 +6,7 @@ import {
   CalendarClock,
   CalendarDays,
   CalendarHeart,
+  CalendarRange,
   CalendarSync,
   ClipboardList,
   Clock,
@@ -13,13 +14,16 @@ import {
   Contact,
   Fingerprint,
   Home,
+  Inbox,
   Loader2,
   MapPin,
   Network,
   PencilLine,
+  Plane,
   RadioTower,
   ScanSearch,
   ScrollText,
+  Tags,
   Settings,
   UserRound,
   Users,
@@ -30,6 +34,10 @@ import { AppShell, type NavItem } from '@/components/app-shell'
 import { FullPageMessage } from '@/components/states'
 import { Button } from '@/components/ui/button'
 import { AttendancePage } from '@/features/attendance/attendance-page'
+import { LeaveCalendarPage } from '@/features/leave/leave-calendar-page'
+import { LeaveRequestsPage } from '@/features/leave/leave-requests-page'
+import { LeaveTypesPage } from '@/features/leave/leave-types-page'
+import { MyLeavePage } from '@/features/leave/my-leave-page'
 import { CorrectionsPage } from '@/features/attendance/corrections-page'
 import { MyAttendancePage } from '@/features/attendance/my-attendance-page'
 import { OrphanPunchesPage } from '@/features/attendance/orphan-punches-page'
@@ -144,6 +152,7 @@ function TenantLayout() {
     { to: '/me', label: 'My profile', icon: UserRound, visible: true },
     { to: '/my-attendance', label: 'My attendance', icon: CalendarCheck, visible: true },
     { to: '/my-schedule', label: 'My schedule', icon: CalendarClock, visible: true },
+    { to: '/my-leave', label: 'My leave', icon: Plane, visible: can('leave.request') },
     { to: '/today', label: 'Today', icon: Activity, section: 'Attendance', visible: can('attendance.view') },
     { to: '/attendance', label: 'Attendance', icon: ClipboardList, section: 'Attendance', visible: can('attendance.view') },
     { to: '/corrections', label: 'Corrections', icon: PencilLine, section: 'Attendance', visible: corrections },
@@ -162,6 +171,15 @@ function TenantLayout() {
       section: 'Attendance',
       visible: can('punch-sources.manage'),
     },
+    {
+      to: '/leave-requests',
+      label: 'Leave requests',
+      icon: Inbox,
+      section: 'Leave',
+      visible: can('leave.view') || can('leave.approve'),
+    },
+    { to: '/leave-calendar', label: 'Leave calendar', icon: CalendarRange, section: 'Leave', visible: can('leave.view') },
+    { to: '/leave-types', label: 'Leave types', icon: Tags, section: 'Leave', visible: can('leave.manage') },
     { to: '/schedules', label: 'Schedules', icon: CalendarDays, section: 'Scheduling', visible: can('schedules.view') },
     { to: '/roster', label: 'Roster', icon: LayoutGrid, section: 'Scheduling', visible: can('schedules.view') },
     { to: '/holidays', label: 'Holidays', icon: CalendarHeart, section: 'Scheduling', visible: can('holidays.view') },
@@ -226,6 +244,10 @@ export function TenantApp({ subdomain }: { subdomain: string }) {
                       { path: '/unmatched-punches', element: <OrphanPunchesPage /> },
                     ]),
                     guarded('punch-sources.manage', [{ path: '/punch-sources', element: <PunchSourcesPage /> }]),
+                    guarded('leave.request', [{ path: '/my-leave', element: <MyLeavePage /> }]),
+                    guarded(['leave.view', 'leave.approve'], [{ path: '/leave-requests', element: <LeaveRequestsPage /> }]),
+                    guarded('leave.view', [{ path: '/leave-calendar', element: <LeaveCalendarPage /> }]),
+                    guarded('leave.manage', [{ path: '/leave-types', element: <LeaveTypesPage /> }]),
                     guarded('schedules.view', [
                       { path: '/schedules', element: <SchedulesPage /> },
                       { path: '/roster', element: <RosterPage /> },

@@ -14,6 +14,7 @@ export const attendanceStatusLabel: Record<AttendanceStatus, string> = {
   incomplete: 'Missing punch',
   absent: 'Absent',
   in_progress: 'In progress',
+  on_leave: 'On leave',
   holiday: 'Holiday',
   rest: 'Rest day',
   day_off: 'Day off',
@@ -29,6 +30,7 @@ export const attendanceStatusTone: Record<AttendanceStatus, Tone> = {
   incomplete: 'warning',
   absent: 'danger',
   in_progress: 'neutral',
+  on_leave: 'info',
   holiday: 'holiday',
   rest: 'neutral',
   day_off: 'neutral',
@@ -45,6 +47,7 @@ export const attendanceCellClass: Record<AttendanceStatus, string> = {
   incomplete: 'bg-status-late/10',
   absent: 'bg-status-absent/10',
   in_progress: 'bg-card',
+  on_leave: 'bg-status-leave/10',
   holiday: 'bg-status-holiday/10',
   rest: 'bg-muted/50 text-muted-foreground',
   day_off: 'bg-muted/50 text-muted-foreground',
@@ -81,6 +84,7 @@ export const flagLabel: Record<string, string> = {
   missed_period: 'A period was not worked',
   below_minimum: 'Below the minimum work time',
   off_day_work: 'Worked on a day off',
+  half_day_leave: 'Half a day of leave; the other half was evaluated',
 }
 
 /** 428 → "7h 08m"; 0 → "—". */

@@ -22,6 +22,7 @@ const tiles: { label: string; statuses: AttendanceStatus[]; tone: string }[] = [
   { label: 'Missing punch', statuses: ['incomplete'], tone: 'text-status-late' },
   { label: 'Absent', statuses: ['absent'], tone: 'text-status-absent' },
   { label: 'In progress', statuses: ['in_progress'], tone: 'text-foreground' },
+  { label: 'On leave', statuses: ['on_leave'], tone: 'text-status-leave' },
   { label: 'Off / holiday', statuses: ['holiday', 'rest', 'day_off'], tone: 'text-status-holiday' },
 ]
 
@@ -67,7 +68,7 @@ export function TodayPage() {
         }
       />
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-8">
         {tiles.map((tile) => {
           const value = tile.statuses.join(',')
           const count = tile.statuses.reduce((sum, s) => sum + (summary.data?.counts[s] ?? 0), 0)
