@@ -201,6 +201,6 @@ npm run build
 | 4   | Scheduling                          | Approved (2026-10-21) |
 | 5   | Punch Ingestion & Attendance Engine | Approved (2026-10-21) |
 | 6   | Leave Management                    | Approved (2026-10-27) |
-| 7   | Overtime Management                 | Not started |
+| 7   | Overtime Management                 | Approved (2026-10-28) |
 | 8   | Reports & Analytics                 | Not started |
 | 9   | Hardening                           | Not started |

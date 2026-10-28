@@ -10,7 +10,7 @@ Start with the [System Guide](SYSTEM_GUIDE.md): architecture, tenancy, conventio
 | 4   | Scheduling                          | Approved (2026-10-21)    | [modules/scheduling.md](modules/scheduling.md) |
 | 5   | Punch Ingestion & Attendance Engine | Approved (2026-10-21)    | [modules/attendance.md](modules/attendance.md) |
 | 6   | Leave Management                    | Approved (2026-10-27)    | [modules/leave.md](modules/leave.md) |
-| 7   | Overtime Management                 | Not started              |                                           |
+| 7   | Overtime Management                 | Approved (2026-10-28)    | [modules/overtime.md](modules/overtime.md) |
 | 8   | Reports & Analytics                 | Not started              |                                           |
 | 9   | Hardening                           | Not started              |                                           |
 

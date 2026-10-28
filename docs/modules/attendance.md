@@ -139,7 +139,7 @@ Everyone may read their own days (`me/attendance`, and `attendance/{id}` for the
 ## Commands
 
 ```bash
-php artisan punches:simulate --tenant=acme [--from=Y-m-d --to=Y-m-d --seed=N --late-rate=0.15 --missing-rate=0.06]
+php artisan punches:simulate --tenant=acme [--from=Y-m-d --to=Y-m-d --seed=N --late-rate=0.15 --missing-rate=0.06 --overtime-rate=0.1]
 php artisan punches:simulate --tenant=acme --http --key=<punch source key>   # through the real API + queue
 php artisan attendance:close-days [--tenant=<id>] [--days=2]                 # also scheduled every 15 minutes
 php artisan schedule:work                                                    # runs the scheduler locally
@@ -171,7 +171,7 @@ visibility/recalculate/isolation; corrections (employee/manager/HR flows, own-re
 - A pending correction cannot be withdrawn by its requester (reject it instead).
 - Times on the Corrections and Punch log lists are shown in the workspace timezone; the day drawer uses the
   employee's location timezone.
-- Overtime (Module 7) will read worked minutes and off-day/holiday work from these records.
+- Overtime (Module 7) reads worked minutes and off-day/holiday work from these records (see below).
 
 ## Leave (added with Module 6)
 
@@ -180,3 +180,11 @@ Approved leave arrives through Core's `LeaveCalendar` contract and `LeaveChanged
 late/early, scheduled 0); a half day excuses that half and evaluates the other from the day's midpoint (flag
 `half_day_leave`, scheduled and minimum work halved). Holidays inside leave stay holidays. Days record
 `leave_name` and `leave_portion`.
+
+## Overtime (added with Module 7)
+
+After each write, `AttendanceCalculator` fires `AttendanceRecalculated($employeeId, $dates)` (`Events/`), with the
+work dates it changed. Overtime listens synchronously, so its records are written by the same writer job.
+`AttendanceQuery::withPeriods($ids, $from, $to, $dates)` gives Overtime the days with their periods (ordered by
+employee and date). `punches:simulate --overtime-rate` (default 0.1) sets the share of people staying 35–120
+minutes after the shift, so the demo produces overtime. See [overtime.md](overtime.md).

@@ -4,6 +4,29 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ## [Unreleased]
 
+### Added — Module 7: Overtime Management
+
+- Overtime module (`app/Modules/Overtime`): overtime calculated from attendance days. Time after the shift counts,
+  capped by the day's surplus over the scheduled time. Early arrival counts only when enabled. All work on rest
+  days and holidays counts at their rates. Minimum, round-down step, daily cap and rates are in `overtime.*` settings.
+- Calculation is idempotent: it runs in the attendance writer job through Attendance's new
+  `AttendanceRecalculated` event. Decided records whose calculation changes go back to pending, flagged
+  `changed_after_decision`.
+- After-the-fact approval by a manager or HR (never one's own). Approvers can approve fewer minutes (weighted
+  minutes in proportion) and approve in bulk. HR records manual overtime, approved at once when entered for
+  someone else.
+- Per-employee summary of approved, weighted and pending overtime. HR can recalculate a range with new settings.
+- SPA: Overtime inbox, Overtime summary, My overtime, employee Overtime tab, overtime in the attendance day
+  drawer, Overtime settings.
+- `punches:simulate --overtime-rate` (share of people staying 35–120 minutes late).
+- 16 new Pest tests (395 total); OpenAPI spec v0.7.0.
+
+### Fixed
+
+- OpenAPI spec: removed a duplicated `components` block that a merge had pasted into `POST /employees`
+  (`employee_code` pattern) since v0.2.0. Also quoted an audit-log description containing `[redacted]`. The spec
+  now parses and every `$ref` resolves.
+
 ### Added — Module 6: Leave Management
 
 - Leave module (`app/Modules/Leave`): leave types (paid/unpaid, yearly grant or monthly accrual, carry-forward

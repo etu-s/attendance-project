@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: AMS API
-  version: 0.6.0
+  version: 0.7.0
   description: |
     Multi-tenant Attendance Management System. JSON only, versioned under `/api/v1`.
 
@@ -45,6 +45,7 @@ tags:
   - name: Scheduling
   - name: Attendance
   - name: Leave
+  - name: Overtime
 
 paths:
   /sanctum/csrf-cookie:
@@ -1309,6 +1310,121 @@ paths:
         content: { application/json: { schema: { type: object, required: [employee_id, leave_type_id, days, reason], properties: { employee_id: { type: integer }, leave_type_id: { type: integer }, days: { type: number, multipleOf: 0.5, description: Non-zero }, leave_year: { type: integer, description: Default current }, reason: { type: string, minLength: 3, maxLength: 255 } } } } }
       responses: { '201': { description: Created, content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/LeaveLedgerEntry' } } } } } }, '422': { $ref: '#/components/responses/ValidationError' } }
 
+  # ---------------------------------------------------------------- overtime (Module 7)
+  /api/v1/overtime:
+    get:
+      tags: [Overtime]
+      summary: Overtime records of the people the viewer can see (overtime.view)
+      description: |
+        Calculated records are written by the attendance writer job (listener on AttendanceRecalculated) and
+        manual ones by HR. A record with 0 calculated minutes is only kept when it was already decided (it went back
+        to pending with changed_after_decision).
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PerPage'
+        - { name: sort, in: query, schema: { type: string, enum: [work_date, -work_date, calculated_minutes, -calculated_minutes], default: -work_date } }
+        - { name: search, in: query, schema: { type: string }, description: Employee name or code }
+        - { name: status, in: query, schema: { type: string, enum: [pending, approved, rejected] } }
+        - { name: source, in: query, schema: { type: string, enum: [calculated, manual] } }
+        - { name: employee_id, in: query, schema: { type: integer } }
+        - { name: department_id, in: query, schema: { type: integer }, description: Current department, incl. sub-departments }
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+        - { name: changed, in: query, schema: { type: boolean }, description: Only records changed after a decision }
+      responses: { '200': { description: OK, content: { application/json: { schema: { type: object, properties: { data: { type: array, items: { $ref: '#/components/schemas/OvertimeRecord' } }, meta: { $ref: '#/components/schemas/PaginationMeta' } } } } } }, '403': { $ref: '#/components/responses/Forbidden' } }
+  /api/v1/overtime/summary:
+    get:
+      tags: [Overtime]
+      summary: Approved and pending overtime per employee over a range (overtime.view); same filters as the list
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PerPage'
+        - { name: search, in: query, schema: { type: string } }
+        - { name: department_id, in: query, schema: { type: integer } }
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+      responses: { '200': { description: OK, content: { application/json: { schema: { type: object, properties: { data: { type: array, items: { $ref: '#/components/schemas/OvertimeSummaryRow' } }, meta: { $ref: '#/components/schemas/PaginationMeta' } } } } } } }
+  /api/v1/overtime/{overtimeRecord}/approve:
+    parameters: [{ name: overtimeRecord, in: path, required: true, schema: { type: integer } }]
+    post:
+      tags: [Overtime]
+      summary: Approve all or fewer minutes (overtime.approve; the employee must be visible; never one's own)
+      description: approved_weighted_minutes = weighted_minutes × minutes ÷ calculated_minutes (rounded down).
+      requestBody: { content: { application/json: { schema: { $ref: '#/components/schemas/OvertimeDecision' } } } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/OvertimeRecord' } } } } } }
+        '403': { description: 'overtime_own (own overtime) or missing permission', content: { application/json: { schema: { $ref: '#/components/schemas/BusinessRuleError' } } } }
+        '409': { description: 'overtime_decided (not pending) or overtime_empty (0 minutes left)', content: { application/json: { schema: { $ref: '#/components/schemas/BusinessRuleError' } } } }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v1/overtime/{overtimeRecord}/reject:
+    parameters: [{ name: overtimeRecord, in: path, required: true, schema: { type: integer } }]
+    post:
+      tags: [Overtime]
+      summary: Reject with an optional note (overtime.approve; never one's own)
+      requestBody: { content: { application/json: { schema: { type: object, properties: { note: { type: [string, 'null'], maxLength: 255 } } } } } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/OvertimeRecord' } } } } } }
+        '403': { description: 'overtime_own or missing permission', content: { application/json: { schema: { $ref: '#/components/schemas/BusinessRuleError' } } } }
+        '409': { description: 'overtime_decided', content: { application/json: { schema: { $ref: '#/components/schemas/BusinessRuleError' } } } }
+  /api/v1/overtime/approve-batch:
+    post:
+      tags: [Overtime]
+      summary: Approve up to 200 pending records in full (overtime.approve)
+      description: Records that are not visible, one's own, not pending or at 0 minutes are skipped, not errors.
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [ids], properties: { ids: { type: array, minItems: 1, maxItems: 200, items: { type: integer } } } } } } }
+      responses: { '200': { description: OK, content: { application/json: { schema: { type: object, properties: { approved: { type: integer }, skipped: { type: integer } } } } } }, '422': { $ref: '#/components/responses/ValidationError' } }
+  /api/v1/overtime/recalculate:
+    post:
+      tags: [Overtime]
+      summary: Queue a recalculation with the current settings (overtime.manage); at most 92 days
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [from, to], properties: { from: { type: string, format: date }, to: { type: string, format: date }, employee_id: { type: [integer, 'null'], description: One visible employee; omitted = everyone } } } } } }
+      responses: { '202': { description: Queued }, '403': { $ref: '#/components/responses/Forbidden' }, '422': { $ref: '#/components/responses/ValidationError' } }
+
+  /api/v1/overtime-entries:
+    post:
+      tags: [Overtime]
+      summary: Record manual overtime (overtime.manage), e.g. work without punches
+      description: |
+        One manual entry per employee and day, not in the future. Entered by HR or a Tenant Admin for someone else:
+        approved at once; otherwise pending.
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/OvertimeEntryInput' } } } }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/OvertimeRecord' } } } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v1/overtime-entries/{overtimeRecord}:
+    parameters: [{ name: overtimeRecord, in: path, required: true, schema: { type: integer } }]
+    put:
+      tags: [Overtime]
+      summary: Change minutes, kind or reason of a pending manual entry (overtime.manage)
+      requestBody: { content: { application/json: { schema: { type: object, properties: { minutes: { type: integer, minimum: 1, maximum: 1440 }, kind: { type: string, enum: [workday, rest_day, holiday] }, reason: { type: string, minLength: 3, maxLength: 255 } } } } } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/OvertimeRecord' } } } } } }
+        '409': { description: 'overtime_calculated (not a manual entry) or overtime_decided', content: { application/json: { schema: { $ref: '#/components/schemas/BusinessRuleError' } } } }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    delete:
+      tags: [Overtime]
+      summary: Delete a pending manual entry (overtime.manage)
+      responses: { '204': { description: Deleted }, '409': { description: 'overtime_calculated or overtime_decided', content: { application/json: { schema: { $ref: '#/components/schemas/BusinessRuleError' } } } } }
+
+  /api/v1/employees/{employee}/overtime:
+    parameters: [{ name: employee, in: path, required: true, schema: { type: integer } }]
+    get:
+      tags: [Overtime]
+      summary: One employee's overtime over a range of at most 62 days (overtime.view, visible employee)
+      parameters:
+        - { name: from, in: query, required: true, schema: { type: string, format: date } }
+        - { name: to, in: query, required: true, schema: { type: string, format: date } }
+      responses: { '200': { description: OK, content: { application/json: { schema: { type: object, properties: { data: { type: array, items: { $ref: '#/components/schemas/OvertimeRecord' } } } } } } }, '403': { $ref: '#/components/responses/Forbidden' } }
+  /api/v1/me/overtime:
+    get:
+      tags: [Overtime]
+      summary: The signed-in employee's own overtime (any signed-in user linked to an employee); at most 62 days
+      parameters:
+        - { name: from, in: query, required: true, schema: { type: string, format: date } }
+        - { name: to, in: query, required: true, schema: { type: string, format: date } }
+      responses: { '200': { description: OK, content: { application/json: { schema: { type: object, properties: { data: { type: array, items: { $ref: '#/components/schemas/OvertimeRecord' } } } } } } }, '404': { description: Login not linked to an employee } }
+
 components:
   securitySchemes:
     PunchSourceKey:
@@ -1953,3 +2069,55 @@ components:
         reason: { type: [string, 'null'] }
         created_by: { type: [object, 'null'] }
         created_at: { type: string, format: date-time }
+    # ---------------------------------------------------------------- Module 7
+    OvertimeRecord:
+      type: object
+      description: Minutes are whole minutes; rates are integer percentages copied from the settings when calculated.
+      properties:
+        id: { type: integer }
+        employee: { type: object, properties: { id: { type: integer }, full_name: { type: string }, employee_code: { type: string } } }
+        work_date: { type: string, format: date }
+        source: { type: string, enum: [calculated, manual] }
+        kind: { type: string, enum: [workday, rest_day, holiday], description: The kind holding most minutes }
+        before_minutes: { type: integer, description: Before the scheduled start (only with overtime.count_early_arrival) }
+        after_minutes: { type: integer, description: After the scheduled end, capped by worked − scheduled }
+        rest_day_minutes: { type: integer }
+        holiday_minutes: { type: integer }
+        calculated_minutes: { type: integer, description: After the minimum, rounding and daily cap }
+        rates: { type: object, properties: { workday: { type: integer }, rest_day: { type: integer }, holiday: { type: integer } } }
+        weighted_minutes: { type: integer, description: Sum of minutes × rate ÷ 100 }
+        status: { type: string, enum: [pending, approved, rejected] }
+        approved_minutes: { type: [integer, 'null'] }
+        approved_weighted_minutes: { type: [integer, 'null'] }
+        decided_by: { type: [object, 'null'], properties: { id: { type: integer }, name: { type: string } } }
+        decided_at: { type: [string, 'null'], format: date-time }
+        decision_note: { type: [string, 'null'] }
+        changed_after_decision: { type: boolean, description: The calculation changed after a decision; back to pending }
+        reason: { type: [string, 'null'], description: Manual entries }
+        created_by: { type: [object, 'null'], properties: { id: { type: integer }, name: { type: string } } }
+        can_decide: { type: boolean, description: The viewer may approve or reject it now }
+    OvertimeDecision:
+      type: object
+      properties:
+        minutes: { type: [integer, 'null'], minimum: 1, maximum: 1440, description: 'Approve fewer minutes (1..calculated); default all' }
+        note: { type: [string, 'null'], maxLength: 255 }
+    OvertimeEntryInput:
+      type: object
+      required: [employee_id, work_date, minutes, kind, reason]
+      properties:
+        employee_id: { type: integer }
+        work_date: { type: string, format: date, description: Not in the future }
+        minutes: { type: integer, minimum: 1, maximum: 1440 }
+        kind: { type: string, enum: [workday, rest_day, holiday], description: Which rate applies }
+        reason: { type: string, minLength: 3, maxLength: 255 }
+    OvertimeSummaryRow:
+      type: object
+      properties:
+        employee: { type: [object, 'null'], properties: { id: { type: integer }, full_name: { type: string }, employee_code: { type: string } } }
+        approved_minutes: { type: integer }
+        approved_weighted_minutes: { type: integer }
+        approved_workday_minutes: { type: integer, description: Approved minutes split in proportion to the record's kinds }
+        approved_rest_day_minutes: { type: integer }
+        approved_holiday_minutes: { type: integer }
+        pending_minutes: { type: integer }
+        pending_count: { type: integer }
