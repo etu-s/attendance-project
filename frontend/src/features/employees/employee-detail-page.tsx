@@ -19,6 +19,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { EmployeeAttendanceTab } from '@/features/attendance/employee-attendance-tab'
 import { EmployeeLeaveTab } from '@/features/leave/employee-leave-tab'
+import { EmployeeOvertimeTab } from '@/features/overtime/employee-overtime-tab'
 import { EmployeeScheduleTab } from '@/features/scheduling/employee-schedule-tab'
 import { useCan, useDisplayPreferences } from '@/features/tenant-auth/hooks'
 import { formatLocalDate, type DisplayPreferences } from '@/lib/format'
@@ -270,6 +271,7 @@ export function EmployeeDetailPage() {
           {can('schedules.view') && <TabsTrigger value="schedule">Schedule</TabsTrigger>}
           {can('attendance.view') && <TabsTrigger value="attendance">Attendance</TabsTrigger>}
           {can('leave.view') && <TabsTrigger value="leave">Leave</TabsTrigger>}
+          {can('overtime.view') && <TabsTrigger value="overtime">Overtime</TabsTrigger>}
         </TabsList>
         <TabsContent value="details" className="pt-4">
           <Card>
@@ -307,6 +309,11 @@ export function EmployeeDetailPage() {
         {can('leave.view') && (
           <TabsContent value="leave" className="pt-4">
             <EmployeeLeaveTab employeeId={employee.id} />
+          </TabsContent>
+        )}
+        {can('overtime.view') && (
+          <TabsContent value="overtime" className="pt-4">
+            <EmployeeOvertimeTab employeeId={employee.id} />
           </TabsContent>
         )}
       </Tabs>

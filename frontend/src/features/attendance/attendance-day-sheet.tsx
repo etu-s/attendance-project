@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Skeleton } from '@/components/ui/skeleton'
+import { DayOvertime } from '@/features/overtime/day-overtime'
 import { useCan, useDisplayPreferences } from '@/features/tenant-auth/hooks'
 import { formatDateTime, formatLocalDate, formatTime } from '@/lib/format'
 import { cn } from '@/lib/utils'
@@ -100,6 +101,8 @@ function DayBody({
           tone={day.early_leave_minutes > 0 ? 'late' : undefined}
         />
       </div>
+
+      <DayOvertime employeeId={day.employee_id} workDate={day.work_date} />
 
       {(day.flags.length > 0 || day.unmatched_punches > 0) && (
         <ul className="space-y-1">

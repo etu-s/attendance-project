@@ -25,6 +25,11 @@ const groupTitles: Record<string, { title: string; description: string }> = {
     title: 'General',
     description: 'Regional settings used to show dates and to decide which day a punch belongs to.',
   },
+  overtime: {
+    title: 'Overtime',
+    description:
+      'How overtime is calculated from attendance. Rates are percentages (150 = 1.5×). Changes apply to days recalculated afterwards.',
+  },
 }
 
 function optionLabel(setting: Setting, option: string | number): string {

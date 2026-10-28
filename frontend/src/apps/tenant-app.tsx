@@ -14,6 +14,7 @@ import {
   Contact,
   Fingerprint,
   Home,
+  Hourglass,
   Inbox,
   Loader2,
   MapPin,
@@ -23,7 +24,9 @@ import {
   RadioTower,
   ScanSearch,
   ScrollText,
+  Sigma,
   Tags,
+  Timer,
   Settings,
   UserRound,
   Users,
@@ -38,6 +41,9 @@ import { LeaveCalendarPage } from '@/features/leave/leave-calendar-page'
 import { LeaveRequestsPage } from '@/features/leave/leave-requests-page'
 import { LeaveTypesPage } from '@/features/leave/leave-types-page'
 import { MyLeavePage } from '@/features/leave/my-leave-page'
+import { MyOvertimePage } from '@/features/overtime/my-overtime-page'
+import { OvertimePage } from '@/features/overtime/overtime-page'
+import { OvertimeSummaryPage } from '@/features/overtime/overtime-summary-page'
 import { CorrectionsPage } from '@/features/attendance/corrections-page'
 import { MyAttendancePage } from '@/features/attendance/my-attendance-page'
 import { OrphanPunchesPage } from '@/features/attendance/orphan-punches-page'
@@ -153,6 +159,7 @@ function TenantLayout() {
     { to: '/my-attendance', label: 'My attendance', icon: CalendarCheck, visible: true },
     { to: '/my-schedule', label: 'My schedule', icon: CalendarClock, visible: true },
     { to: '/my-leave', label: 'My leave', icon: Plane, visible: can('leave.request') },
+    { to: '/my-overtime', label: 'My overtime', icon: Timer, visible: true },
     { to: '/today', label: 'Today', icon: Activity, section: 'Attendance', visible: can('attendance.view') },
     { to: '/attendance', label: 'Attendance', icon: ClipboardList, section: 'Attendance', visible: can('attendance.view') },
     { to: '/corrections', label: 'Corrections', icon: PencilLine, section: 'Attendance', visible: corrections },
@@ -180,6 +187,8 @@ function TenantLayout() {
     },
     { to: '/leave-calendar', label: 'Leave calendar', icon: CalendarRange, section: 'Leave', visible: can('leave.view') },
     { to: '/leave-types', label: 'Leave types', icon: Tags, section: 'Leave', visible: can('leave.manage') },
+    { to: '/overtime', label: 'Overtime', icon: Hourglass, section: 'Overtime', visible: can('overtime.view') },
+    { to: '/overtime-summary', label: 'Overtime summary', icon: Sigma, section: 'Overtime', visible: can('overtime.view') },
     { to: '/schedules', label: 'Schedules', icon: CalendarDays, section: 'Scheduling', visible: can('schedules.view') },
     { to: '/roster', label: 'Roster', icon: LayoutGrid, section: 'Scheduling', visible: can('schedules.view') },
     { to: '/holidays', label: 'Holidays', icon: CalendarHeart, section: 'Scheduling', visible: can('holidays.view') },
@@ -248,6 +257,11 @@ export function TenantApp({ subdomain }: { subdomain: string }) {
                     guarded(['leave.view', 'leave.approve'], [{ path: '/leave-requests', element: <LeaveRequestsPage /> }]),
                     guarded('leave.view', [{ path: '/leave-calendar', element: <LeaveCalendarPage /> }]),
                     guarded('leave.manage', [{ path: '/leave-types', element: <LeaveTypesPage /> }]),
+                    { path: '/my-overtime', element: <MyOvertimePage /> },
+                    guarded('overtime.view', [
+                      { path: '/overtime', element: <OvertimePage /> },
+                      { path: '/overtime-summary', element: <OvertimeSummaryPage /> },
+                    ]),
                     guarded('schedules.view', [
                       { path: '/schedules', element: <SchedulesPage /> },
                       { path: '/roster', element: <RosterPage /> },
