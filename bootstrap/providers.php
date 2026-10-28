@@ -6,6 +6,7 @@ use App\Modules\Core\CoreServiceProvider;
 use App\Modules\Identity\IdentityServiceProvider;
 use App\Modules\Leave\LeaveServiceProvider;
 use App\Modules\Organization\OrganizationServiceProvider;
+use App\Modules\Overtime\OvertimeServiceProvider;
 use App\Modules\Scheduling\SchedulingServiceProvider;
 use App\Modules\Timetable\TimetableServiceProvider;
 use App\Providers\HorizonServiceProvider;
@@ -24,4 +25,5 @@ return [
     SchedulingServiceProvider::class,
     AttendanceServiceProvider::class,
     LeaveServiceProvider::class,
+    OvertimeServiceProvider::class,
 ];

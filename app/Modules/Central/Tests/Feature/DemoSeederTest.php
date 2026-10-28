@@ -10,6 +10,7 @@ use App\Modules\Central\Models\Domain;
 use App\Modules\Leave\Models\LeaveRequest;
 use App\Modules\Leave\Models\LeaveType;
 use App\Modules\Organization\Models\Employee;
+use App\Modules\Overtime\Models\OvertimeRecord;
 use App\Modules\Scheduling\Models\Holiday;
 use App\Modules\Scheduling\Models\ScheduleAssignment;
 use App\Modules\Timetable\Models\Shift;
@@ -40,7 +41,9 @@ it('provisions the local demo tenant with its demo data, once', function (): voi
             ->and(LeaveType::query()->count())->toBe(3)
             ->and(LeaveRequest::query()->pluck('status')->map->value->sort()->values()->all())
             ->toBe(['approved', 'approved', 'approved', 'pending', 'pending', 'rejected'])
-            ->and(AttendanceDay::query()->where('status', 'on_leave')->exists())->toBeTrue();
+            ->and(AttendanceDay::query()->where('status', 'on_leave')->exists())->toBeTrue()
+            // Simulated late leavers become overtime through AttendanceRecalculated.
+            ->and(OvertimeRecord::query()->exists())->toBeTrue();
     });
 
     expect(Domain::query()->where('domain', 'acme')->count())->toBe(1);
