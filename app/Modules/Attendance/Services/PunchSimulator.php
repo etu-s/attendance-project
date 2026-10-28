@@ -15,7 +15,8 @@ use Illuminate\Database\Eloquent\Builder;
 /**
  * Generates realistic punches from each employee's real schedule (local
  * development and demos): mostly on time, some late, some early leavers,
- * missed punches, absences, double taps, and one unknown badge so the
+ * some staying late (overtime), missed punches, absences, double taps, and
+ * one unknown badge so the
  * unmatched-punch flow has something to show. Seeded, so a run can be
  * repeated exactly; repeating it creates only duplicates.
  */
@@ -43,7 +44,7 @@ final class PunchSimulator
     /**
      * @return list<array{employee_identifier: string, punched_at: string, idempotency_key: string}>
      */
-    public function generate(CarbonImmutable $from, CarbonImmutable $to, float $lateRate, float $missingRate, int $seed): array
+    public function generate(CarbonImmutable $from, CarbonImmutable $to, float $lateRate, float $missingRate, int $seed, float $overtimeRate = 0.1): array
     {
         mt_srand($seed);
         $now = CarbonImmutable::now('UTC');
@@ -70,7 +71,9 @@ final class PunchSimulator
                             : $period->startsAt->subMinutes(mt_rand(0, 20));
                         $out = $this->chance($lateRate / 2)
                             ? $period->endsAt->subMinutes(mt_rand(10, 60))
-                            : $period->endsAt->addMinutes(mt_rand(0, 25));
+                            : ($this->chance($overtimeRate)
+                                ? $period->endsAt->addMinutes(mt_rand(35, 120))
+                                : $period->endsAt->addMinutes(mt_rand(0, 25)));
 
                         $in = $in->addSeconds(mt_rand(0, 59));
                         $times = [$in, $out->addSeconds(mt_rand(0, 59))];

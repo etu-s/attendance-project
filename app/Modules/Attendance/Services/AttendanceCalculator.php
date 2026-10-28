@@ -8,6 +8,7 @@ use App\Modules\Attendance\Enums\AttendanceStatus;
 use App\Modules\Attendance\Enums\CorrectionKind;
 use App\Modules\Attendance\Enums\CorrectionStatus;
 use App\Modules\Attendance\Enums\PunchDirection;
+use App\Modules\Attendance\Events\AttendanceRecalculated;
 use App\Modules\Attendance\Models\AttendanceDay;
 use App\Modules\Attendance\Models\AttendancePeriod;
 use App\Modules\Attendance\Models\AttendancePunch;
@@ -282,6 +283,8 @@ final class AttendanceCalculator
                 }
             }
         });
+
+        event(new AttendanceRecalculated($employeeId, array_column($changes, 0)));
 
         return count($changes);
     }

@@ -83,6 +83,27 @@ final class AttendanceQuery
     }
 
     /**
+     * Calculated days with their periods for many employees (no visibility
+     * scoping: for modules computing from attendance, such as overtime).
+     *
+     * @param  list<int>  $employeeIds
+     * @param  list<string>|null  $dates  only these work dates, or every date in [from, to]
+     * @return Collection<int, AttendanceDay>
+     */
+    public function withPeriods(array $employeeIds, CarbonImmutable $from, CarbonImmutable $to, ?array $dates = null): Collection
+    {
+        return AttendanceDay::query()
+            ->with('periods')
+            ->whereIn('employee_id', $employeeIds)
+            ->where('work_date', '>=', $from->format(LocalDate::FORMAT))
+            ->where('work_date', '<=', $to->format(LocalDate::FORMAT))
+            ->when($dates !== null, fn (Builder $q) => $q->whereIn('work_date', $dates))
+            ->orderBy('employee_id')
+            ->orderBy('work_date')
+            ->get();
+    }
+
+    /**
      * @param  array<string, mixed>  $filters
      * @return Builder<AttendanceDay>
      */

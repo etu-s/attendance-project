@@ -30,6 +30,7 @@ final class SimulatePunchesCommand extends Command
         {--to= : Last work date (Y-m-d, default: today)}
         {--late-rate=0.15 : Share of late arrivals (early leavers: half of it)}
         {--missing-rate=0.06 : Share of missed punches (absences: half of it)}
+        {--overtime-rate=0.1 : Share of people staying 35–120 minutes late}
         {--seed= : Random seed (same seed = same punches)}
         {--http : Post to the API instead of ingesting directly}
         {--key= : Punch source key for --http}
@@ -63,7 +64,7 @@ final class SimulatePunchesCommand extends Command
         $seed = $this->option('seed') !== null ? (int) $this->option('seed') : random_int(1, PHP_INT_MAX);
 
         $simulator = app(PunchSimulator::class);
-        $punches = $simulator->generate($from, $to, (float) $this->option('late-rate'), (float) $this->option('missing-rate'), $seed);
+        $punches = $simulator->generate($from, $to, (float) $this->option('late-rate'), (float) $this->option('missing-rate'), $seed, (float) $this->option('overtime-rate'));
         $this->components->info(sprintf('%d punches for %s to %s (seed %d).', count($punches), $from->toDateString(), $to->toDateString(), $seed));
 
         $batchSize = (int) app(SettingsService::class)->get('attendance.max_batch_size');
