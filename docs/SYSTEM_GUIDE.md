@@ -8,7 +8,7 @@ to extend it safely. Read it once end to end before your first change, then use 
 > If something here disagrees with those files or with the code, the code and CLAUDE.md win; please fix
 > this guide.
 >
-> Last reviewed: 2026-11-10 (Modules 1–7 approved, Module 8 built and awaiting approval).
+> Last reviewed: 2026-11-10 (Modules 1–8 approved).
 
 ---
 
@@ -74,7 +74,7 @@ before the next starts (see [§18](#18-workflow-quality-gates-and-git)).
 | 5   | Punch Ingestion & Attendance Engine | Approved 2026-10-21                              | [attendance.md](modules/attendance.md)           |
 | 6   | Leave Management                    | Approved 2026-10-27                              | [leave.md](modules/leave.md)                     |
 | 7   | Overtime Management                 | Approved 2026-10-28                              | [overtime.md](modules/overtime.md)               |
-| 8   | Reports & Analytics                 | Built, awaiting approval (2026-11-10)            | [reports.md](modules/reports.md)                 |
+| 8   | Reports & Analytics                 | Approved 2026-11-10                              | [reports.md](modules/reports.md)                 |
 | 9   | Hardening                           | Not started                                      |                                                  |
 
 The status table in [CLAUDE.md](../CLAUDE.md) and [docs/README.md](README.md) is updated after every approval.
@@ -646,7 +646,7 @@ Settings → Overtime.
 
 Full detail: [modules/overtime.md](modules/overtime.md).
 
-### 12.8 Module 8 — Reports & Analytics (`Reports`) — *built, awaiting approval*
+### 12.8 Module 8 — Reports & Analytics (`Reports`) — *approved 2026-11-10*
 
 **Rollup** `attendance_daily_stats` (work date × department × location as recorded on the day; 0 = none), kept in step
 by the attendance writer job and rebuilt with `reports:rebuild-stats`. HR and Tenant Admin read it; managers, group

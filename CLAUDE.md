@@ -204,5 +204,5 @@ npm run build
 | 5   | Punch Ingestion & Attendance Engine | Approved (2026-10-21) |
 | 6   | Leave Management                    | Approved (2026-10-27) |
 | 7   | Overtime Management                 | Approved (2026-10-28) |
-| 8   | Reports & Analytics                 | Built, awaiting approval (2026-11-10) |
+| 8   | Reports & Analytics                 | Approved (2026-11-10) |
 | 9   | Hardening                           | Not started |

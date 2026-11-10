@@ -1,6 +1,6 @@
 # Module 8 — Reports & Analytics
 
-Status: **built, awaiting approval** (2026-11-10)
+Status: **approved** (2026-11-10)
 
 A dashboard and five tabular reports over calculated attendance, leave and overtime, with queued CSV/XLSX exports.
 Code: `app/Modules/Reports`, `frontend/src/features/reports`; read methods added to `Attendance\Services\AttendanceQuery`,
