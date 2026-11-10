@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Overtime\Services;
 
 use App\Modules\Core\Casts\LocalDate;
+use App\Modules\Core\Contracts\PeriodLock;
 use App\Modules\Core\Exceptions\BusinessRuleException;
 use App\Modules\Core\Services\SettingsService;
 use App\Modules\Core\Support\TenantClock;
@@ -28,11 +29,13 @@ final class OvertimeService
         private readonly OvertimeAccess $access,
         private readonly SettingsService $settings,
         private readonly TenantClock $clock,
+        private readonly PeriodLock $locks,
     ) {}
 
     public function approve(OvertimeRecord $record, User $actor, ?int $minutes, ?string $note): OvertimeRecord
     {
         $this->assertDecidable($record, $actor);
+        $this->assertOpenDay($record->work_date, 'This overtime decision');
 
         if ($record->calculated_minutes === 0) {
             throw new BusinessRuleException('There is no overtime left to approve; reject it instead.', 'overtime_empty');
@@ -59,6 +62,7 @@ final class OvertimeService
     public function reject(OvertimeRecord $record, User $actor, ?string $note): OvertimeRecord
     {
         $this->assertDecidable($record, $actor);
+        $this->assertOpenDay($record->work_date, 'This overtime decision');
 
         $record->update([
             'status' => OvertimeStatus::Rejected,
@@ -74,7 +78,8 @@ final class OvertimeService
     }
 
     /**
-     * Approves every given record the actor may decide, as calculated; the rest are skipped.
+     * Approves every given record the actor may decide, as calculated; the
+     * rest (incl. days in a locked payroll period) are skipped.
      *
      * @param  list<int>  $ids
      * @return array{approved: int, skipped: int}
@@ -83,8 +88,15 @@ final class OvertimeService
     {
         $approved = 0;
         $records = OvertimeRecord::query()->with('employee')->whereKey($ids)->get();
+        $locked = $records->isEmpty() ? [] : $this->locks->lockedDates(
+            $records->min(fn (OvertimeRecord $r) => $r->work_date),
+            $records->max(fn (OvertimeRecord $r) => $r->work_date),
+        );
 
         foreach ($records as $record) {
+            if (isset($locked[$record->work_date->format(LocalDate::FORMAT)])) {
+                continue;
+            }
             if ($record->calculated_minutes > 0 && $this->access->canDecide($actor, $record)) {
                 $this->approve($record, $actor, null, null);
                 $approved++;
@@ -101,6 +113,7 @@ final class OvertimeService
     {
         $date = LocalDate::parse($data['work_date']);
         $this->assertNotFuture($date);
+        $this->assertOpenDay($date, 'This overtime entry');
 
         $exists = OvertimeRecord::withTrashed()
             ->where('employee_id', $employee->id)
@@ -142,6 +155,7 @@ final class OvertimeService
     public function updateManual(OvertimeRecord $record, array $data): OvertimeRecord
     {
         $this->assertEditableManual($record);
+        $this->assertOpenDay($record->work_date, 'This overtime entry');
 
         $kind = isset($data['kind']) ? OvertimeKind::from($data['kind']) : $record->mainKind();
         $record->update($this->manualAttributes($kind, (int) ($data['minutes'] ?? $record->calculated_minutes)) + [
@@ -154,7 +168,13 @@ final class OvertimeService
     public function deleteManual(OvertimeRecord $record): void
     {
         $this->assertEditableManual($record);
+        $this->assertOpenDay($record->work_date, 'This overtime entry');
         $record->forceDelete();
+    }
+
+    private function assertOpenDay(CarbonImmutable $date, string $what): void
+    {
+        $this->locks->assertOpen($date, $date, $what);
     }
 
     /**

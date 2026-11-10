@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Leave\Services;
 
 use App\Modules\Core\Casts\LocalDate;
+use App\Modules\Core\Contracts\PeriodLock;
 use App\Modules\Core\Enums\DayPortion;
 use App\Modules\Core\Events\LeaveChanged;
 use App\Modules\Core\Exceptions\BusinessRuleException;
@@ -36,6 +37,7 @@ final class LeaveRequestService
         private readonly LeaveDayCounter $counter,
         private readonly LeaveLedger $ledger,
         private readonly LeaveRules $rules,
+        private readonly PeriodLock $locks,
     ) {}
 
     /**
@@ -82,6 +84,8 @@ final class LeaveRequestService
         $to = LocalDate::parse($data['end_date']);
         $halfStart = (bool) ($data['half_start'] ?? false);
         $halfEnd = (bool) ($data['half_end'] ?? false);
+        // Refused even while pending: it could never be approved.
+        $this->locks->assertOpen($from, $to, 'This leave');
 
         $preview = $this->preview($employee, $type, $from, $to, $halfStart, $halfEnd);
         if ($preview['problem'] !== null) {
@@ -126,6 +130,7 @@ final class LeaveRequestService
     {
         $request->loadMissing(['employee', 'type']);
         $this->assertDecidable($request, $actor);
+        $this->locks->assertOpen($request->start_date, $request->end_date, 'This leave');
 
         // Balances may have moved since the request was made.
         $preview = $this->preview($request->employee, $request->type, $request->start_date, $request->end_date, $request->half_start, $request->half_end, $request);
@@ -178,6 +183,10 @@ final class LeaveRequestService
         }
 
         $wasApproved = $request->status === LeaveRequestStatus::Approved;
+        if ($wasApproved) {
+            // Withdrawing a pending request changes nothing and stays possible.
+            $this->locks->assertOpen($request->start_date, $request->end_date, 'Cancelling this leave');
+        }
 
         DB::transaction(function () use ($request, $actor, $wasApproved): void {
             if ($wasApproved) {

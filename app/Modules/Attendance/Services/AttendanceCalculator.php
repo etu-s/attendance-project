@@ -19,6 +19,7 @@ use App\Modules\Attendance\Support\DayResult;
 use App\Modules\Attendance\Support\PunchInput;
 use App\Modules\Core\Casts\LocalDate;
 use App\Modules\Core\Contracts\LeaveCalendar;
+use App\Modules\Core\Contracts\PeriodLock;
 use App\Modules\Core\Services\SettingsService;
 use App\Modules\Organization\Models\Employee;
 use App\Modules\Organization\Models\EmployeeAssignment;
@@ -64,6 +65,7 @@ final class AttendanceCalculator
         private readonly AssignmentService $assignments,
         private readonly SettingsService $settings,
         private readonly LeaveCalendar $leave,
+        private readonly PeriodLock $locks,
     ) {}
 
     /**
@@ -151,6 +153,8 @@ final class AttendanceCalculator
             ->get(['id', 'employee_id', 'work_date', 'fingerprint'])
             ->groupBy('employee_id');
         $rules = AttendanceRules::fromSettings($this->settings);
+        // Days in a locked payroll period are frozen: never rewritten.
+        $locked = $this->locks->lockedDates($from, $to);
         $now = CarbonImmutable::now('UTC');
 
         $written = 0;
@@ -162,7 +166,7 @@ final class AttendanceCalculator
                 $key = $date->format(LocalDate::FORMAT);
                 $localToday = LocalDate::parse($now->setTimezone($days[$key]->timezone)->format(LocalDate::FORMAT));
 
-                if ($date->lessThanOrEqualTo($localToday)) {
+                if ($date->lessThanOrEqualTo($localToday) && ! isset($locked[$key])) {
                     $dates[] = $key;
                 }
             }

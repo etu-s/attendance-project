@@ -10,6 +10,7 @@ use App\Modules\Attendance\Jobs\RecalculateAttendance;
 use App\Modules\Attendance\Models\PunchCorrection;
 use App\Modules\Attendance\Models\PunchMatch;
 use App\Modules\Core\Casts\LocalDate;
+use App\Modules\Core\Contracts\PeriodLock;
 use App\Modules\Core\Exceptions\BusinessRuleException;
 use App\Modules\Core\Support\Search;
 use App\Modules\Core\Support\TenantClock;
@@ -35,6 +36,7 @@ final class PunchCorrectionService
     public function __construct(
         private readonly EmployeeVisibility $visibility,
         private readonly TenantClock $clock,
+        private readonly PeriodLock $locks,
     ) {}
 
     /**
@@ -81,6 +83,7 @@ final class PunchCorrectionService
         if ($workDate->greaterThan($this->clock->today())) {
             throw ValidationException::withMessages(['work_date' => 'Attendance for a future date cannot be corrected.']);
         }
+        $this->locks->assertOpen($workDate, $workDate, 'This correction');
 
         $attributes = [
             'employee_id' => $employee->id,
@@ -127,6 +130,8 @@ final class PunchCorrectionService
     public function approve(PunchCorrection $correction, User $actor, ?string $note): PunchCorrection
     {
         $this->assertDecidable($correction, $actor);
+        // Rejecting stays possible: a rejected correction changes nothing.
+        $this->locks->assertOpen($correction->work_date, $correction->work_date, 'This correction');
 
         $correction->update([
             'status' => CorrectionStatus::Approved,

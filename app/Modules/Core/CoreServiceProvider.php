@@ -6,6 +6,7 @@ namespace App\Modules\Core;
 
 use App\Modules\Core\Console\BackupDatabasesCommand;
 use App\Modules\Core\Contracts\LeaveCalendar;
+use App\Modules\Core\Contracts\PeriodLock;
 use App\Modules\Core\Enums\RoleName;
 use App\Modules\Core\Enums\SettingType;
 use App\Modules\Core\Events\TenantDatabaseProvisioned;
@@ -21,6 +22,7 @@ use App\Modules\Core\Settings\SettingDefinition;
 use App\Modules\Core\Settings\SettingsRegistry;
 use App\Modules\Core\Support\ModuleServiceProvider;
 use App\Modules\Core\Support\NoLeaveCalendar;
+use App\Modules\Core\Support\NoPeriodLock;
 use App\Modules\Core\Support\TenantClock;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Model;
@@ -41,6 +43,8 @@ final class CoreServiceProvider extends ModuleServiceProvider
         $this->app->singleton(TenantClock::class);
         // The Leave module rebinds this (registered after Core).
         $this->app->singleton(LeaveCalendar::class, NoLeaveCalendar::class);
+        // The Payroll module rebinds this (registered after Core).
+        $this->app->singleton(PeriodLock::class, NoPeriodLock::class);
     }
 
     public function boot(): void

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Scheduling\Services;
 
 use App\Modules\Core\Casts\LocalDate;
+use App\Modules\Core\Contracts\PeriodLock;
 use App\Modules\Core\Support\Search;
 use App\Modules\Identity\Models\User;
 use App\Modules\Organization\Models\Employee;
@@ -27,6 +28,7 @@ final class TemporaryScheduleService
 
     public function __construct(
         private readonly EmployeeVisibility $visibility,
+        private readonly PeriodLock $locks,
     ) {}
 
     /**
@@ -81,6 +83,7 @@ final class TemporaryScheduleService
     public function create(Employee $employee, array $data): TemporarySchedule
     {
         $attributes = $this->validated($employee, $data, null);
+        $this->locks->assertOpen(LocalDate::parse((string) $data['date_from']), LocalDate::parse((string) $data['date_to']), 'This temporary schedule');
         $temporary = TemporarySchedule::query()->create($attributes + ['employee_id' => $employee->id]);
         $this->changed($temporary, $temporary->date_from, $temporary->date_to);
 
@@ -102,7 +105,13 @@ final class TemporaryScheduleService
         ], $data);
 
         $employee = Employee::withTrashed()->findOrFail($temporary->employee_id);
-        $temporary->update($this->validated($employee, $merged, $temporary->id));
+        $attributes = $this->validated($employee, $merged, $temporary->id);
+        $newFrom = LocalDate::parse((string) $merged['date_from']);
+        $newTo = LocalDate::parse((string) $merged['date_to']);
+        // Both the days it covered and the days it will cover change.
+        $this->locks->assertOpen($before[0], $before[1], 'This temporary schedule');
+        $this->locks->assertOpen($newFrom, $newTo, 'This temporary schedule');
+        $temporary->update($attributes);
         $this->changed($temporary, min($before[0], $temporary->date_from), max($before[1], $temporary->date_to));
 
         return $temporary->load('shift');
@@ -110,6 +119,7 @@ final class TemporaryScheduleService
 
     public function delete(TemporarySchedule $temporary): void
     {
+        $this->locks->assertOpen($temporary->date_from, $temporary->date_to, 'Removing this temporary schedule');
         $temporary->delete();
         $this->changed($temporary, $temporary->date_from, $temporary->date_to);
     }

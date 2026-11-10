@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Scheduling\Services;
 
 use App\Modules\Core\Casts\LocalDate;
+use App\Modules\Core\Contracts\PeriodLock;
 use App\Modules\Core\Support\TenantClock;
 use App\Modules\Identity\Models\User;
 use App\Modules\Organization\Models\Employee;
@@ -38,6 +39,7 @@ final class ScheduleAssignmentService
         private readonly ScheduleTargets $targets,
         private readonly EmployeeVisibility $visibility,
         private readonly TenantClock $clock,
+        private readonly PeriodLock $locks,
     ) {}
 
     /**
@@ -101,6 +103,7 @@ final class ScheduleAssignmentService
                 $to = $covering !== null ? $covering->effective_to : $next?->effective_from->subDay();
             }
 
+            $this->locks->assertOpen($from, $to, 'This schedule change');
             $this->clearRange($existing, $from, $to);
 
             return ScheduleAssignment::query()->create([
@@ -148,6 +151,7 @@ final class ScheduleAssignmentService
             }
         }
 
+        $this->assertUpdateOpen($assignment, $data);
         $assignment->update($data);
 
         // The affected range is the union of the old and new extents.
@@ -159,6 +163,7 @@ final class ScheduleAssignmentService
 
     public function delete(ScheduleAssignment $assignment): void
     {
+        $this->locks->assertOpen($assignment->effective_from, $assignment->effective_to, 'Removing this schedule');
         $assignment->delete();
         $this->changed($assignment, $assignment->effective_from, $assignment->effective_to);
     }
@@ -225,6 +230,37 @@ final class ScheduleAssignmentService
             } else {
                 $period->delete();
             }
+        }
+    }
+
+    /**
+     * The days an update really changes must not be in a locked payroll
+     * period: the whole period when the shift or anchor changes, otherwise
+     * only the days between the old and the new end (null = open-ended).
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function assertUpdateOpen(ScheduleAssignment $assignment, array $data): void
+    {
+        $oldTo = $assignment->effective_to;
+        $newTo = array_key_exists('effective_to', $data)
+            ? ($data['effective_to'] === null ? null : LocalDate::parse((string) $data['effective_to']))
+            : $oldTo;
+        $shiftChanges = isset($data['shift_id']) && (int) $data['shift_id'] !== $assignment->shift_id;
+        $anchorChanges = isset($data['anchor_date']) && ! LocalDate::parse((string) $data['anchor_date'])->equalTo($assignment->anchor_date);
+
+        if ($shiftChanges || $anchorChanges) {
+            $end = $oldTo === null || $newTo === null ? null : $oldTo->max($newTo);
+            $this->locks->assertOpen($assignment->effective_from, $end, 'This schedule change');
+
+            return;
+        }
+
+        $sameEnd = ($oldTo === null && $newTo === null) || ($oldTo !== null && $newTo !== null && $oldTo->equalTo($newTo));
+        if (! $sameEnd) {
+            $earlier = $oldTo === null ? $newTo : ($newTo === null ? $oldTo : $oldTo->min($newTo));
+            $later = $oldTo === null || $newTo === null ? null : $oldTo->max($newTo);
+            $this->locks->assertOpen($earlier->addDay(), $later, 'This schedule change');
         }
     }
 

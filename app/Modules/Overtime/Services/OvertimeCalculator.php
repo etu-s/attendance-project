@@ -9,6 +9,7 @@ use App\Modules\Attendance\Models\AttendanceDay;
 use App\Modules\Attendance\Models\AttendancePeriod;
 use App\Modules\Attendance\Services\AttendanceQuery;
 use App\Modules\Core\Casts\LocalDate;
+use App\Modules\Core\Contracts\PeriodLock;
 use App\Modules\Core\Services\SettingsService;
 use App\Modules\Organization\Models\Employee;
 use App\Modules\Overtime\Enums\OvertimeSource;
@@ -40,6 +41,7 @@ final class OvertimeCalculator
     public function __construct(
         private readonly AttendanceQuery $attendance,
         private readonly SettingsService $settings,
+        private readonly PeriodLock $locks,
     ) {}
 
     /**
@@ -51,10 +53,13 @@ final class OvertimeCalculator
     {
         $ids = $employeeIds ?? Employee::withTrashed()->orderBy('id')->pluck('id')->map(fn ($id) => (int) $id)->all();
         $rules = OvertimeSettings::fromSettings($this->settings);
+        // Overtime of a locked payroll period is frozen with its attendance.
+        $locked = $this->locks->lockedDates($from, $to);
         $changed = 0;
 
         foreach (array_chunk($ids, self::CHUNK) as $chunk) {
-            $days = $this->attendance->withPeriods($chunk, $from, $to, $dates);
+            $days = $this->attendance->withPeriods($chunk, $from, $to, $dates)
+                ->reject(fn (AttendanceDay $day) => isset($locked[$day->work_date->format(LocalDate::FORMAT)]));
             $existing = OvertimeRecord::withTrashed()
                 ->whereIn('employee_id', $chunk)
                 ->where('source', OvertimeSource::Calculated->value)

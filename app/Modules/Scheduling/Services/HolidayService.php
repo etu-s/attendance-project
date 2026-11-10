@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Scheduling\Services;
 
 use App\Modules\Core\Casts\LocalDate;
+use App\Modules\Core\Contracts\PeriodLock;
 use App\Modules\Scheduling\Events\ScheduleChanged;
 use App\Modules\Scheduling\Models\Holiday;
 use Carbon\CarbonImmutable;
@@ -14,6 +15,10 @@ use Illuminate\Validation\ValidationException;
 
 final class HolidayService
 {
+    public function __construct(
+        private readonly PeriodLock $locks,
+    ) {}
+
     /**
      * Holidays that fall in $year (one-off ones dated that year, recurring
      * ones from earlier years), each with `occurs_on` set, ordered by date.
@@ -67,6 +72,7 @@ final class HolidayService
     public function create(array $data): Holiday
     {
         $this->assertUnique($data['date'], $data['location_id'] ?? null, null);
+        $this->assertOpen(LocalDate::parse($data['date']), (bool) ($data['recurs_yearly'] ?? false));
         $holiday = Holiday::query()->create($data);
         $this->changed($holiday);
 
@@ -84,6 +90,11 @@ final class HolidayService
             array_key_exists('location_id', $data) ? $data['location_id'] : $holiday->location_id,
             $holiday->id,
         );
+        $this->assertOpen($holiday->date, $holiday->recurs_yearly);
+        $this->assertOpen(
+            isset($data['date']) ? LocalDate::parse((string) $data['date']) : $holiday->date,
+            (bool) ($data['recurs_yearly'] ?? $holiday->recurs_yearly),
+        );
         $holiday->update($data);
         $this->changed($before);
         $this->changed($holiday);
@@ -93,6 +104,7 @@ final class HolidayService
 
     public function delete(Holiday $holiday): void
     {
+        $this->assertOpen($holiday->date, $holiday->recurs_yearly);
         $holiday->delete();
         $this->changed($holiday);
     }
@@ -118,6 +130,34 @@ final class HolidayService
 
         if ($exists) {
             throw ValidationException::withMessages(['date' => 'There is already a holiday on this date for the same scope.']);
+        }
+    }
+
+    /**
+     * A one-off holiday changes its own date; a yearly one its day in every
+     * year from its date on. None of those days may be in a locked period.
+     */
+    private function assertOpen(CarbonImmutable $date, bool $recurs): void
+    {
+        if (! $recurs) {
+            $this->locks->assertOpen($date, $date, 'This holiday change');
+
+            return;
+        }
+
+        foreach ($this->locks->overlapping($date, $date->addYears(100)) as $period) {
+            $start = LocalDate::parse($period['start_date']);
+            $end = LocalDate::parse($period['end_date']);
+            for ($year = $start->year; $year <= $end->year; $year++) {
+                // Skips 29 February in years without one.
+                if (! checkdate($date->month, $date->day, $year)) {
+                    continue;
+                }
+                $occurrence = $date->setDate($year, $date->month, $date->day);
+                if ($occurrence->greaterThanOrEqualTo($date) && $occurrence->betweenIncluded($start, $end)) {
+                    $this->locks->assertOpen($occurrence, $occurrence, 'This holiday change');
+                }
+            }
         }
     }
 
