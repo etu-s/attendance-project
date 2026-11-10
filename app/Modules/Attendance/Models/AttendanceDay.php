@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace App\Modules\Attendance\Models;
 
+use App\Modules\Attendance\Database\Factories\AttendanceDayFactory;
 use App\Modules\Attendance\Enums\AttendanceStatus;
 use App\Modules\Core\Casts\LocalDate;
 use App\Modules\Organization\Models\Employee;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -47,6 +49,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  */
 class AttendanceDay extends Model
 {
+    /** @use HasFactory<AttendanceDayFactory> */
+    use HasFactory;
+
     /** UTC instants, stored as text so ordering and indexes work (CLAUDE.md). */
     protected $dateFormat = 'Y-m-d H:i:s';
 
@@ -71,6 +76,11 @@ class AttendanceDay extends Model
             'flags' => 'array',
             'calculated_at' => 'immutable_datetime',
         ];
+    }
+
+    protected static function newFactory(): AttendanceDayFactory
+    {
+        return AttendanceDayFactory::new();
     }
 
     /**

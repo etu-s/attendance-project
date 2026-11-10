@@ -46,14 +46,14 @@ it('is idempotent', function (): void {
 it('applies newly registered permissions and settings via tenants:seed without touching existing values', function (): void {
     $this->tenant->run(fn () => app(SettingsService::class)->update(['general.week_start' => 0]));
 
-    app(PermissionCatalog::class)->register('reports.view', [RoleName::HrManager]);
-    app(SettingsRegistry::class)->register(new SettingDefinition('reports.default_range', SettingType::Integer, 30, 'Default range'));
+    app(PermissionCatalog::class)->register('sandbox.view', [RoleName::HrManager]);
+    app(SettingsRegistry::class)->register(new SettingDefinition('sandbox.default_range', SettingType::Integer, 30, 'Default range'));
 
     $this->artisan('tenants:seed', ['--force' => true])->assertSuccessful();
 
     $this->tenant->run(function (): void {
-        expect(Role::findByName('hr-manager', 'web')->hasPermissionTo('reports.view'))->toBeTrue()
+        expect(Role::findByName('hr-manager', 'web')->hasPermissionTo('sandbox.view'))->toBeTrue()
             ->and(app(SettingsService::class)->get('general.week_start'))->toBe(0)
-            ->and(Setting::query()->where('key', 'reports.default_range')->exists())->toBeTrue();
+            ->and(Setting::query()->where('key', 'sandbox.default_range')->exists())->toBeTrue();
     });
 });

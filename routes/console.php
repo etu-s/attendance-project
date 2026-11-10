@@ -13,3 +13,6 @@ Schedule::command('attendance:close-days')->everyFifteenMinutes()->withoutOverla
 
 // Leave grants, monthly accruals, carry-forward and expiry (Leave module); idempotent.
 Schedule::command('leave:accrue')->hourly()->withoutOverlapping();
+
+// Deletes report export files past their expiry (Reports module).
+Schedule::command('reports:prune-exports')->daily()->withoutOverlapping();

@@ -47,7 +47,7 @@ final class OvertimeQuery
      * @param  array<string, mixed>  $filters
      * @return LengthAwarePaginator<int, OvertimeRecord>
      */
-    public function summary(array $filters, ?string $search, int $perPage, User $viewer): LengthAwarePaginator
+    public function summary(array $filters, ?string $search, int $perPage, User $viewer, ?int $page = null): LengthAwarePaginator
     {
         unset($filters['status']);
         $approved = OvertimeStatus::Approved->value;
@@ -69,8 +69,36 @@ final class OvertimeQuery
             ->groupBy('employee_id')
             ->orderByDesc('approved_weighted_minutes')
             ->orderBy('employee_id')
-            ->paginate($perPage)
+            ->paginate($perPage, ['*'], 'page', $page)
             ->withQueryString();
+    }
+
+    /**
+     * Totals over a range for the viewer's employees (Reports dashboard).
+     *
+     * @param  array<string, mixed>  $filters  from, to, department_id
+     * @return array{approved_minutes: int, approved_weighted_minutes: int, pending_minutes: int, pending_count: int}
+     */
+    public function totals(array $filters, User $viewer): array
+    {
+        unset($filters['status']);
+        $approved = OvertimeStatus::Approved->value;
+        $pending = OvertimeStatus::Pending->value;
+
+        $row = $this->filtered($filters, null, $viewer)
+            ->toBase()
+            ->selectRaw("sum(case when status = '{$approved}' then approved_minutes else 0 end) as approved_minutes")
+            ->selectRaw("sum(case when status = '{$approved}' then approved_weighted_minutes else 0 end) as approved_weighted_minutes")
+            ->selectRaw("sum(case when status = '{$pending}' then calculated_minutes else 0 end) as pending_minutes")
+            ->selectRaw("sum(case when status = '{$pending}' then 1 else 0 end) as pending_count")
+            ->first();
+
+        return [
+            'approved_minutes' => (int) ($row->approved_minutes ?? 0),
+            'approved_weighted_minutes' => (int) ($row->approved_weighted_minutes ?? 0),
+            'pending_minutes' => (int) ($row->pending_minutes ?? 0),
+            'pending_count' => (int) ($row->pending_count ?? 0),
+        ];
     }
 
     /**

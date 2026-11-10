@@ -31,6 +31,19 @@ return [
         'demo_admin_password' => env('SEED_DEMO_ADMIN_PASSWORD', 'password1'),
     ],
 
+    // Reports & Analytics limits (application limits, not business rules).
+    'reports' => [
+        // Longest range shown on screen, and written to an export file.
+        'max_view_days' => 92,
+        'max_export_days' => 366,
+        // How long a dashboard result is cached (0 = not cached).
+        'dashboard_cache_seconds' => (int) env('REPORTS_DASHBOARD_CACHE_SECONDS', 60),
+        // Export files are deleted after this many days (reports:prune-exports).
+        'export_ttl_days' => 7,
+        // Queued or running exports one user may have at a time.
+        'max_pending_exports' => 5,
+    ],
+
     'rate_limits' => [
         'login_per_minute' => (int) env('LOGIN_RATE_LIMIT', 5),
         'api_per_minute' => (int) env('API_RATE_LIMIT', 120),
