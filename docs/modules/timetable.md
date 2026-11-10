@@ -26,7 +26,7 @@ when applied to a date.
 | Table              | Notes |
 | ------------------ | ----- |
 | `timetables`       | `code` NOCASE unique, `type` fixed/flexible, `start_minute` (0–1439), `duration_minutes` (1–1440; fixed = shift, flexible = window), flexible `required_minutes` + optional core hours (offset + duration), nullable `late_grace_minutes`, `early_leave_grace_minutes`, `check_in_before_minutes`, `check_out_after_minutes` (null = workspace default), `min_work_minutes`, `color`, `is_active` |
-| `timetable_breaks` | `kind` fixed/floating, `start_offset` (fixed: minutes after start), `duration_minutes`, `is_paid`, `position`; cascade with the timetable |
+| `timetable_breaks` | `kind` fixed/floating, `start_offset` (fixed: minutes after start), `duration_minutes`, `is_paid`, `position`, optional `name` (a label such as "Lunch"; not a time rule, so it can change while the timetable is locked); cascade with the timetable |
 | `shifts`           | `code` NOCASE unique, `cycle_unit` day/week, `cycle_length` (≤ 56 days / ≤ 8 weeks), `description`, `is_active` |
 | `shift_days`       | (shift, `day_index`, timetable) unique; timetable FK **restrict** (a timetable in a shift cannot be deleted) |
 

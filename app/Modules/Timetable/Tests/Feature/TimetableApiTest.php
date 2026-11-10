@@ -144,6 +144,33 @@ describe('update, lock, duplicate and delete', function (): void {
             ->assertOk()->assertJsonPath('data.name', 'Renamed');
     });
 
+    it('names breaks, and renaming a break is allowed while the timetable is locked', function (): void {
+        $named = [
+            ['kind' => 'fixed', 'start_offset' => 180, 'duration_minutes' => 60, 'is_paid' => false, 'name' => '  Lunch '],
+            ['kind' => 'floating', 'start_offset' => null, 'duration_minutes' => 15, 'is_paid' => true, 'name' => ''],
+        ];
+        $this->putJson($this->tenantUrl($this->tenant, "timetables/{$this->id}"), ['breaks' => $named])
+            ->assertOk()
+            ->assertJsonPath('data.breaks.0.name', 'Lunch')
+            ->assertJsonPath('data.breaks.1.name', null);
+
+        $this->tenant->run(function (): void {
+            Shift::factory()->on(Timetable::query()->findOrFail($this->id), [0])->create();
+            app(UsageRegistry::class)->whenShiftInUse(fn (int $shiftId) => true);
+        });
+
+        $named[0]['name'] = 'Midday meal';
+        $this->putJson($this->tenantUrl($this->tenant, "timetables/{$this->id}"), ['breaks' => $named])
+            ->assertOk()->assertJsonPath('data.breaks.0.name', 'Midday meal');
+
+        $named[0]['duration_minutes'] = 45;
+        $this->putJson($this->tenantUrl($this->tenant, "timetables/{$this->id}"), ['breaks' => $named])
+            ->assertStatus(409)->assertJsonPath('rule', 'timetable_locked');
+
+        $this->postJson($this->tenantUrl($this->tenant, "timetables/{$this->id}/duplicate"))
+            ->assertCreated()->assertJsonPath('data.breaks.0.name', 'Midday meal');
+    });
+
     it('duplicates with a free code so a locked timetable can be replaced', function (): void {
         $this->postJson($this->tenantUrl($this->tenant, "timetables/{$this->id}/duplicate"))
             ->assertCreated()

@@ -4,6 +4,12 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ## [Unreleased]
 
+### Added — Timetable break names
+
+- Breaks take an optional `name` (for example "Lunch"), added by a new additive tenant migration. A name is a label,
+  not a time rule, so it can change on a timetable that is in use; duplicates keep it. The demo timetables name
+  their breaks.
+
 ### Added — Module 7: Overtime Management
 
 - Overtime module (`app/Modules/Overtime`): overtime calculated from attendance days. Time after the shift counts,

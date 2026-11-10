@@ -104,7 +104,7 @@ final class TimetableService
         $this->assertConsistent($attributes, $breaks);
 
         $timeRulesChanged = $this->timeRulesChanged($timetable, $attributes)
-            || ($breaksGiven && $this->breaksChanged($timetable, $breaks));
+            || ($breaksGiven && $this->breakRulesChanged($timetable, $breaks));
 
         if ($timeRulesChanged && $this->isLocked($timetable)) {
             throw new BusinessRuleException(
@@ -300,8 +300,22 @@ final class TimetableService
     }
 
     /**
+     * Like breaksChanged() but ignoring names: a label is not a time rule, so
+     * renaming a break is allowed on a timetable that is in use.
+     *
      * @param  list<array<string, mixed>>  $breaks
-     * @return list<array{kind: string, start_offset: int|null, duration_minutes: int, is_paid: bool}>
+     */
+    private function breakRulesChanged(Timetable $timetable, array $breaks): bool
+    {
+        $withoutName = fn (array $b): array => array_diff_key($b, ['name' => true]);
+
+        return array_map($withoutName, $timetable->breaks->map->snapshot()->all())
+            !== array_map($withoutName, $this->snapshots($breaks));
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $breaks
+     * @return list<array{kind: string, start_offset: int|null, duration_minutes: int, is_paid: bool,name: string|null}>
      */
     private function snapshots(array $breaks): array
     {
@@ -313,6 +327,7 @@ final class TimetableService
                 'start_offset' => $kind === BreakKind::Fixed->value ? (int) $b['start_offset'] : null,
                 'duration_minutes' => (int) $b['duration_minutes'],
                 'is_paid' => (bool) ($b['is_paid'] ?? false),
+                'name' => isset($b['name']) && trim((string) $b['name']) !== '' ? trim((string) $b['name']) : null,
             ];
         }, $breaks));
     }

@@ -1705,6 +1705,7 @@ components:
         start_offset: { type: [integer, 'null'], description: Minutes after the timetable start (fixed only) }
         duration_minutes: { type: integer, minimum: 1, maximum: 720 }
         is_paid: { type: boolean }
+        name: { type: [string, 'null'], maxLength: 120, description: Optional label such as Lunch. Not a time rule, so it can change on a locked timetable }
     Timetable:
       type: object
       description: All times are whole minutes from local midnight; end_minute above 1440 is the next day.

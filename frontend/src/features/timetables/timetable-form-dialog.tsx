@@ -64,6 +64,7 @@ const schema = z
           start: optionalTime,
           duration: z.string().refine((v) => /^\d+$/.test(v) && Number(v) >= 1 && Number(v) <= 720, '1–720 minutes.'),
           is_paid: z.boolean(),
+          name: z.string().trim().max(120, 'At most 120 characters.'),
         }),
       )
       .max(MAX_BREAKS),
@@ -139,6 +140,7 @@ function toValues(t: Timetable): Values {
       start: b.start_offset === null ? '' : minutesToTime(t.start_minute + b.start_offset),
       duration: String(b.duration_minutes),
       is_paid: b.is_paid,
+      name: b.name ?? '',
     })),
   }
 }
@@ -175,6 +177,7 @@ function toPayload(v: Values): TimetablePayload {
         start_offset: b.kind === 'fixed' && at !== null ? (at - start + 1440) % 1440 : null,
         duration_minutes: Number(b.duration),
         is_paid: b.is_paid,
+        name: b.name.trim() === '' ? null : b.name.trim(),
       }
     }),
   }
@@ -189,7 +192,15 @@ function previewOf(w: DeepPartial<Values>): TimetablePayload | null {
 
   const breaks = (w.breaks ?? []).flatMap((b) =>
     b && /^\d+$/.test(b.duration ?? '') && Number(b.duration) > 0
-      ? [{ kind: b.kind ?? 'floating', start: b.start ?? '', duration: b.duration ?? '0', is_paid: b.is_paid ?? false }]
+      ? [
+          {
+            kind: b.kind ?? 'floating',
+            start: b.start ?? '',
+            duration: b.duration ?? '0',
+            is_paid: b.is_paid ?? false,
+            name: b.name ?? '',
+          },
+        ]
       : [],
   )
 
@@ -205,10 +216,10 @@ function formField(path: string): string {
     core_start_offset: 'core_start',
     core_duration_minutes: 'core_end',
   }
-  const breakMatch = /^breaks\.(\d+)\.(start_offset|duration_minutes|kind)$/.exec(path)
+  const breakMatch = /^breaks\.(\d+)\.(start_offset|duration_minutes|kind|name)$/.exec(path)
   if (breakMatch) {
-    const sub = { start_offset: 'start', duration_minutes: 'duration', kind: 'kind' }[
-      breakMatch[2] as 'start_offset' | 'duration_minutes' | 'kind'
+    const sub = { start_offset: 'start', duration_minutes: 'duration', kind: 'kind', name: 'name' }[
+      breakMatch[2] as 'start_offset' | 'duration_minutes' | 'kind' | 'name'
     ]
     return `breaks.${breakMatch[1] ?? '0'}.${sub}`
   }
@@ -393,6 +404,7 @@ export function TimetableFormDialog({ target, onClose, onDuplicated }: Timetable
                         start: '',
                         duration: '60',
                         is_paid: false,
+                        name: '',
                       })
                     }
                   >
@@ -410,8 +422,11 @@ export function TimetableFormDialog({ target, onClose, onDuplicated }: Timetable
                   return (
                     <div
                       key={item.id}
-                      className="grid items-start gap-3 rounded-md border p-3 sm:grid-cols-[1.2fr_1fr_1fr_auto_auto]"
+                      className="grid items-start gap-3 rounded-md border p-3 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]"
                     >
+                      <Field label="Name" error={rowErrors?.name?.message}>
+                        <Input className="w-full" {...form.register(`breaks.${i}.name`)} />
+                      </Field>
                       <Controller
                         control={form.control}
                         name={`breaks.${i}.kind`}

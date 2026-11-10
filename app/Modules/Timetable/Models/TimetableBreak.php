@@ -19,12 +19,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int $duration_minutes
  * @property bool $is_paid
  * @property int $position
+ * @property string|null $name
  */
 class TimetableBreak extends Model
 {
     public $timestamps = false;
 
-    protected $fillable = ['timetable_id', 'kind', 'start_offset', 'duration_minutes', 'is_paid', 'position'];
+    protected $fillable = ['timetable_id', 'kind', 'start_offset', 'duration_minutes', 'is_paid', 'position', 'name'];
 
     protected function casts(): array
     {
@@ -34,11 +35,12 @@ class TimetableBreak extends Model
             'duration_minutes' => 'integer',
             'is_paid' => 'boolean',
             'position' => 'integer',
+            'name' => 'string',
         ];
     }
 
     /**
-     * @return array{kind: string, start_offset: int|null, duration_minutes: int, is_paid: bool}
+     * @return array{kind: string, start_offset: int|null, duration_minutes: int, is_paid: bool,name: string|null}
      */
     public function snapshot(): array
     {
@@ -47,6 +49,7 @@ class TimetableBreak extends Model
             'start_offset' => $this->start_offset,
             'duration_minutes' => $this->duration_minutes,
             'is_paid' => $this->is_paid,
+            'name' => $this->name,
         ];
     }
 

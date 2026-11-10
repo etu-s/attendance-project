@@ -35,8 +35,13 @@ class TimetableRequest extends FormRequest
 
         return [
             'name' => [$required, 'string', 'max:120'],
-            'code' => [$required, 'string', 'max:30', 'regex:/^[A-Za-z0-9._-]+$/',
-                Rule::unique(Timetable::class, 'code')->ignore($editing ? $timetable->id : null)],
+            'code' => [
+                $required,
+                'string',
+                'max:30',
+                'regex:/^[A-Za-z0-9._-]+$/',
+                Rule::unique(Timetable::class, 'code')->ignore($editing ? $timetable->id : null),
+            ],
             'type' => [$required, Rule::enum(TimetableType::class)],
             'color' => ['sometimes', 'nullable', 'regex:/^#[0-9a-fA-F]{6}$/'],
             'start_minute' => [$required, 'integer', 'min:0', 'max:1439'],
@@ -55,6 +60,7 @@ class TimetableRequest extends FormRequest
             'breaks.*.start_offset' => ['nullable', 'integer', 'min:0', 'max:1439'],
             'breaks.*.duration_minutes' => ['required', 'integer', 'min:1', 'max:720'],
             'breaks.*.is_paid' => ['sometimes', 'boolean'],
+            'breaks.*.name' => ['nullable', 'string', 'max:120'],
         ];
     }
 }

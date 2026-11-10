@@ -12,6 +12,7 @@ export interface TimetableBreak {
   start_offset: number | null
   duration_minutes: number
   is_paid: boolean
+  name: string | null
 }
 
 /** Mirrors TimetableResource.php — all times are minutes from local midnight. */
