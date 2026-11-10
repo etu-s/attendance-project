@@ -8,6 +8,7 @@ use App\Modules\Attendance\Enums\AttendanceStatus;
 use App\Modules\Attendance\Enums\CorrectionKind;
 use App\Modules\Attendance\Enums\CorrectionStatus;
 use App\Modules\Attendance\Enums\PunchDirection;
+use App\Modules\Attendance\Events\AttendanceDaysChanged;
 use App\Modules\Attendance\Events\AttendanceRecalculated;
 use App\Modules\Attendance\Models\AttendanceDay;
 use App\Modules\Attendance\Models\AttendancePeriod;
@@ -48,6 +49,15 @@ final class AttendanceCalculator
 
     private const DATETIME = 'Y-m-d H:i:s';
 
+    /**
+     * Work dates changed during the current recalculate() run (for the one
+     * AttendanceDaysChanged it fires at the end). Saved and restored around
+     * a run, so a nested run cannot mix its dates into the outer one.
+     *
+     * @var array<string, true>
+     */
+    private array $changedDates = [];
+
     public function __construct(
         private readonly ScheduleResolver $resolver,
         private readonly DayEvaluator $evaluator,
@@ -79,6 +89,8 @@ final class AttendanceCalculator
         }
 
         $written = 0;
+        $outer = $this->changedDates;
+        $this->changedDates = [];
         $start = $from;
         while ($start->lessThanOrEqualTo($to)) {
             $end = $start->addDays(self::SPAN_DAYS - 1)->min($to);
@@ -88,6 +100,14 @@ final class AttendanceCalculator
             });
 
             $start = $end->addDay();
+        }
+
+        $dates = array_keys($this->changedDates);
+        sort($dates);
+        $this->changedDates = $outer;
+
+        if ($dates !== []) {
+            event(new AttendanceDaysChanged($dates));
         }
 
         return $written;
@@ -284,7 +304,11 @@ final class AttendanceCalculator
             }
         });
 
-        event(new AttendanceRecalculated($employeeId, array_column($changes, 0)));
+        $dates = array_column($changes, 0);
+        foreach ($dates as $date) {
+            $this->changedDates[$date] = true;
+        }
+        event(new AttendanceRecalculated($employeeId, $dates));
 
         return count($changes);
     }

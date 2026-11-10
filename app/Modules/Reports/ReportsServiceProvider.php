@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Reports;
 
-use App\Modules\Attendance\Events\AttendanceRecalculated;
+use App\Modules\Attendance\Events\AttendanceDaysChanged;
 use App\Modules\Core\Enums\RoleName;
 use App\Modules\Core\Permissions\PermissionCatalog;
 use App\Modules\Core\Support\ModuleServiceProvider;
@@ -42,7 +42,7 @@ final class ReportsServiceProvider extends ModuleServiceProvider
 
         Relation::enforceMorphMap(['report_export' => ReportExport::class]);
 
-        Event::listen(AttendanceRecalculated::class, RefreshDailyStats::class);
+        Event::listen(AttendanceDaysChanged::class, RefreshDailyStats::class);
 
         $catalog = $this->app->make(PermissionCatalog::class);
         $catalog->register('reports.view', [RoleName::HrManager, RoleName::DepartmentManager]);

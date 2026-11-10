@@ -63,6 +63,27 @@ final class AssignmentService
     }
 
     /**
+     * Employees assigned to any of the departments, or to the location, at
+     * some point in [from, to] (history included), in one query.
+     *
+     * @param  list<int>|null  $departmentIds
+     * @return list<int>
+     */
+    public function employeeIdsIn(?array $departmentIds, ?int $locationId, CarbonImmutable $from, CarbonImmutable $to): array
+    {
+        return EmployeeAssignment::query()
+            ->when($departmentIds !== null, fn (Builder $q) => $q->whereIn('department_id', $departmentIds))
+            ->when($locationId !== null, fn (Builder $q) => $q->where('location_id', $locationId))
+            ->where('effective_from', '<=', $to->format(LocalDate::FORMAT))
+            ->where(fn (Builder $q) => $q->whereNull('effective_to')->orWhere('effective_to', '>=', $from->format(LocalDate::FORMAT)))
+            ->distinct()
+            ->orderBy('employee_id')
+            ->pluck('employee_id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+    }
+
+    /**
      * Opens an employee's first period (hire) or a new period after a gap (rehire).
      */
     public function start(Employee $employee, int $departmentId, ?int $locationId, CarbonImmutable $from): EmployeeAssignment

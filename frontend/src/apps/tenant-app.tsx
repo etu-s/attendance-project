@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { lazy, Suspense, useMemo, type ComponentType } from 'react'
 import {
   Activity,
   Building,
@@ -51,13 +51,6 @@ import { MyLeavePage } from '@/features/leave/my-leave-page'
 import { MyOvertimePage } from '@/features/overtime/my-overtime-page'
 import { OvertimePage } from '@/features/overtime/overtime-page'
 import { OvertimeSummaryPage } from '@/features/overtime/overtime-summary-page'
-import { AttendanceSummaryPage } from '@/features/reports/attendance-summary-page'
-import { ExceptionsPage } from '@/features/reports/exceptions-page'
-import { ExportsPage } from '@/features/reports/exports-page'
-import { LeaveReportPage } from '@/features/reports/leave-report-page'
-import { OvertimeReportPage } from '@/features/reports/overtime-report-page'
-import { RegisterPage } from '@/features/reports/register-page'
-import { ReportsDashboardPage } from '@/features/reports/reports-dashboard-page'
 import { CorrectionsPage } from '@/features/attendance/corrections-page'
 import { MyAttendancePage } from '@/features/attendance/my-attendance-page'
 import { OrphanPunchesPage } from '@/features/attendance/orphan-punches-page'
@@ -93,6 +86,36 @@ function Loading() {
       <Loader2 className="text-muted-foreground size-6 animate-spin" />
     </div>
   )
+}
+
+/*
+ * Report pages load on first visit: they bring Recharts and are not needed by
+ * most users (employees never open them).
+ */
+function lazyPage(load: () => Promise<ComponentType>) {
+  const Page = lazy(() => load().then((component) => ({ default: component })))
+
+  return (
+    <Suspense
+      fallback={
+        <div className="flex justify-center py-16" role="status" aria-label="Loading">
+          <Loader2 className="text-muted-foreground size-6 animate-spin" />
+        </div>
+      }
+    >
+      <Page />
+    </Suspense>
+  )
+}
+
+const reportPages = {
+  dashboard: () => import('@/features/reports/reports-dashboard-page').then((m) => m.ReportsDashboardPage),
+  attendance: () => import('@/features/reports/attendance-summary-page').then((m) => m.AttendanceSummaryPage),
+  register: () => import('@/features/reports/register-page').then((m) => m.RegisterPage),
+  exceptions: () => import('@/features/reports/exceptions-page').then((m) => m.ExceptionsPage),
+  leave: () => import('@/features/reports/leave-report-page').then((m) => m.LeaveReportPage),
+  overtime: () => import('@/features/reports/overtime-report-page').then((m) => m.OvertimeReportPage),
+  exports: () => import('@/features/reports/exports-page').then((m) => m.ExportsPage),
 }
 
 /**
@@ -290,14 +313,14 @@ export function TenantApp({ subdomain }: { subdomain: string }) {
                       { path: '/overtime-summary', element: <OvertimeSummaryPage /> },
                     ]),
                     guarded('reports.view', [
-                      { path: '/reports', element: <ReportsDashboardPage /> },
-                      { path: '/reports/attendance', element: <AttendanceSummaryPage /> },
-                      { path: '/reports/register', element: <RegisterPage /> },
-                      { path: '/reports/exceptions', element: <ExceptionsPage /> },
-                      { path: '/reports/leave', element: <LeaveReportPage /> },
-                      { path: '/reports/overtime', element: <OvertimeReportPage /> },
+                      { path: '/reports', element: lazyPage(reportPages.dashboard) },
+                      { path: '/reports/attendance', element: lazyPage(reportPages.attendance) },
+                      { path: '/reports/register', element: lazyPage(reportPages.register) },
+                      { path: '/reports/exceptions', element: lazyPage(reportPages.exceptions) },
+                      { path: '/reports/leave', element: lazyPage(reportPages.leave) },
+                      { path: '/reports/overtime', element: lazyPage(reportPages.overtime) },
                     ]),
-                    guarded('reports.export', [{ path: '/reports/exports', element: <ExportsPage /> }]),
+                    guarded('reports.export', [{ path: '/reports/exports', element: lazyPage(reportPages.exports) }]),
                     guarded('schedules.view', [
                       { path: '/schedules', element: <SchedulesPage /> },
                       { path: '/roster', element: <RosterPage /> },

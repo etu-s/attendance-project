@@ -62,6 +62,24 @@ final class MembershipService
             ->groupBy('employee_id');
     }
 
+    /**
+     * Members of a group at some point in [from, to] (history included).
+     *
+     * @return list<int>
+     */
+    public function employeeIdsIn(int $groupId, CarbonImmutable $from, CarbonImmutable $to): array
+    {
+        return GroupMembership::query()
+            ->where('group_id', $groupId)
+            ->where('effective_from', '<=', $to->format(LocalDate::FORMAT))
+            ->where(fn (Builder $q) => $q->whereNull('effective_to')->orWhere('effective_to', '>=', $from->format(LocalDate::FORMAT)))
+            ->distinct()
+            ->orderBy('employee_id')
+            ->pluck('employee_id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+    }
+
     public function add(Employee $employee, Group $group, CarbonImmutable $from): GroupMembership
     {
         if (! $group->is_active) {
