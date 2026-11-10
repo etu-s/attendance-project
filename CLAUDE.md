@@ -159,6 +159,8 @@ php artisan reverb:start             # installed, not configured yet
 php artisan punches:simulate --tenant=acme   # simulated punches from real schedules (--http --key=... via the API)
 php artisan attendance:close-days    # re-evaluate recent days (scheduled every 15 min)
 php artisan leave:accrue             # leave grants, accruals, carry-forward, expiry (scheduled hourly, idempotent)
+php artisan reports:rebuild-stats     # queue a rebuild of the report rollup (run once on workspaces with existing attendance)
+php artisan reports:prune-exports     # delete expired report export files (scheduled daily)
 php artisan schedule:work            # run the scheduler locally
 composer test          # Pest
 ./vendor/bin/pint      # format
@@ -202,5 +204,5 @@ npm run build
 | 5   | Punch Ingestion & Attendance Engine | Approved (2026-10-21) |
 | 6   | Leave Management                    | Approved (2026-10-27) |
 | 7   | Overtime Management                 | Approved (2026-10-28) |
-| 8   | Reports & Analytics                 | Not started |
+| 8   | Reports & Analytics                 | Built, awaiting approval (2026-11-10) |
 | 9   | Hardening                           | Not started |

@@ -4,6 +4,29 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ## [Unreleased]
 
+### Added — Module 8: Reports & Analytics
+
+- Reports module (`app/Modules/Reports`): `attendance_daily_stats`, a rollup of calculated attendance per work date,
+  department and location. The attendance writer keeps it in sync through `AttendanceRecalculated`; it rebuilds
+  whole dates and is idempotent. `php artisan reports:rebuild-stats` rebuilds it (run once on existing workspaces).
+- Dashboard: attendance rate and punctuality (working days only), absences, lateness, leave and overtime, a daily
+  trend, days by status and a department table. HR reads the rollup; managers, group filters and searches are
+  calculated live for the viewer's people. Cached 60 s per workspace and viewer scope.
+- Reports: attendance summary per employee, monthly register, late / early / absent / missing-punch days, leave
+  taken per type, overtime per employee. At most 92 days on screen.
+- Queued CSV and XLSX exports (`openspout/openspout`): requester-only downloads, formula-safe CSV, up to 366 days,
+  at most 5 in progress per user, files deleted after 7 days by `reports:prune-exports` (scheduled daily).
+- Permissions `reports.view` and `reports.export` (HR, Department Manager).
+- Read methods for reports in `AttendanceQuery`, `LeaveQuery` and `OvertimeQuery`, and an `AttendanceDay` factory.
+- SPA: Reports section with Dashboard (Recharts), Attendance summary, Monthly register, Late and absent, Leave taken,
+  Overtime report and Exports; an Export menu on every report.
+- 35 new Pest tests (431 total); OpenAPI spec v0.8.0.
+
+### Changed
+
+- `PermissionSyncTest` used `reports.view` as an example of a not-yet-registered permission; it now uses
+  `sandbox.view`, because Module 8 registers `reports.view`.
+
 ### Added — Timetable break names
 
 - Breaks take an optional `name` (for example "Lunch"), added by a new additive tenant migration. A name is a label,

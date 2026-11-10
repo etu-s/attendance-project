@@ -8,7 +8,7 @@ to extend it safely. Read it once end to end before your first change, then use 
 > If something here disagrees with those files or with the code, the code and CLAUDE.md win; please fix
 > this guide.
 >
-> Last reviewed: 2026-10-21 (Modules 1 and 2 approved, Module 3 built and awaiting approval).
+> Last reviewed: 2026-11-10 (Modules 1–7 approved, Module 8 built and awaiting approval).
 
 ---
 
@@ -74,7 +74,7 @@ before the next starts (see [§18](#18-workflow-quality-gates-and-git)).
 | 5   | Punch Ingestion & Attendance Engine | Approved 2026-10-21                              | [attendance.md](modules/attendance.md)           |
 | 6   | Leave Management                    | Approved 2026-10-27                              | [leave.md](modules/leave.md)                     |
 | 7   | Overtime Management                 | Approved 2026-10-28                              | [overtime.md](modules/overtime.md)               |
-| 8   | Reports & Analytics                 | Not started                                      |                                                  |
+| 8   | Reports & Analytics                 | Built, awaiting approval (2026-11-10)            | [reports.md](modules/reports.md)                 |
 | 9   | Hardening                           | Not started                                      |                                                  |
 
 The status table in [CLAUDE.md](../CLAUDE.md) and [docs/README.md](README.md) is updated after every approval.
@@ -109,7 +109,7 @@ Change history is in [CHANGELOG.md](../CHANGELOG.md).
 | Routing       | React Router 8                                                 |
 | Forms         | React Hook Form + Zod 4 (schemas mirror backend validation)    |
 | Theme         | next-themes (light / dark / system)                            |
-| Charts        | Recharts (planned for Reports; not installed yet)              |
+| Charts        | Recharts (Reports dashboard)                                   |
 | Lint / format | ESLint (zero warnings) + Prettier (with Tailwind plugin)       |
 
 Adding a new **major** dependency (backend or frontend) needs approval first.
@@ -201,7 +201,7 @@ morph map, registers policies, permissions, settings and event listeners). See
 [TimetableServiceProvider.php](../app/Modules/Timetable/TimetableServiceProvider.php).
 
 Current provider order (`bootstrap/providers.php`): Tenancy, Horizon, Core, Central, Identity, Organization,
-Timetable, Scheduling, Attendance, Leave, Overtime. Keep new modules after the modules they depend on.
+Timetable, Scheduling, Attendance, Leave, Overtime, Reports. Keep new modules after the modules they depend on.
 
 ### 5.2 How modules talk to each other
 
@@ -226,7 +226,9 @@ Timetable, Scheduling, Attendance, Leave, Overtime. Keep new modules after the m
 | `ScheduleChanged`                | Scheduling event | Fired after commit for every assignment, temporary-schedule or holiday change (scope + date range); attendance recalculation listens |
 | `AttendanceCalculator::recalculate($ids, $from, $to)` | Attendance | Rebuilds attendance days (queued via `RecalculateAttendance`; one writer per tenant). Leave feeds it; overtime reads it |
 | `AttendanceRecalculated` | Attendance event | Fired after each attendance write with the employee and changed dates; Overtime listens synchronously (same writer job) |
-| `AttendanceQuery` | Attendance | Visibility-scoped reads of attendance days and per-status counts (for Reports); `withPeriods()` for Overtime |
+| `AttendanceQuery` | Attendance | Visibility-scoped reads of attendance days and per-status counts; `withPeriods()` for Overtime; `aggregateColumns()` / `aggregate()` / `aggregatePerEmployee()` / `dailyStats()` / `daysFor()` for Reports (one definition of every count) |
+| `RefreshDailyStats` (listener) / `DailyStatsBuilder` | Reports | Keeps `attendance_daily_stats` in step inside the attendance writer job (on `AttendanceRecalculated`); rebuilds whole dates |
+| `LeaveQuery::takenPerEmployee()` / `OvertimeQuery::summary()` / `totals()` | Leave / Overtime | Report reads of approved leave (half days) and overtime totals, scoped by visibility |
 | `OvertimeCalculator` / `OvertimeQuery` | Overtime | Overtime records from attendance days (idempotent); per-employee approved/weighted/pending totals (for Reports) |
 | `LeaveCalendar` (contract) / `LeaveChanged` (event) | Core ← Leave | Approved leave per employee and day, and its changes; Attendance consumes both without depending on Leave. Core binds an empty default |
 | `LeaveBalanceService` / `LeaveLedger` | Leave | Balances are read from (and written to) the append-only ledger only |
@@ -534,7 +536,7 @@ flexible timetables have optional core hours; holidays belong to Module 4.
 | Table              | Notes |
 | ------------------ | ----- |
 | `timetables`       | `code` NOCASE unique, `type` (fixed/flexible), `color`, `start_minute`, `duration_minutes` (may cross midnight), flexible: `required_minutes`, optional core hours (`core_start_offset` + `core_duration_minutes`); nullable overrides: `late_grace_minutes`, `early_leave_grace_minutes`, `check_in_before_minutes`, `check_out_after_minutes`, `min_work_minutes`; `is_active` |
-| `timetable_breaks` | `kind` (fixed/floating), `start_offset` (fixed only, minutes after start), `duration_minutes`, `is_paid`, `position`; max 4 per timetable |
+| `timetable_breaks` | `kind` (fixed/floating), `start_offset` (fixed only, minutes after start), `duration_minutes`, `is_paid`, `position`, optional `name` (a label; may change while locked); max 4 per timetable |
 | `shifts`           | `code`, `cycle_unit` (day: up to 56 days / week: up to 8 weeks), `cycle_length`, `description`, `is_active` |
 | `shift_days`       | (`shift_id`, `day_index`, `timetable_id`) unique; week cycles: index 0 = Monday of week 1; timetable FK `restrict` |
 
@@ -644,15 +646,31 @@ Settings → Overtime.
 
 Full detail: [modules/overtime.md](modules/overtime.md).
 
+### 12.8 Module 8 — Reports & Analytics (`Reports`) — *built, awaiting approval*
+
+**Rollup** `attendance_daily_stats` (work date × department × location as recorded on the day; 0 = none), kept in step
+by the attendance writer job and rebuilt with `reports:rebuild-stats`. HR and Tenant Admin read it; managers, group
+filters and searches aggregate live for the viewer's people. Both use `AttendanceQuery::aggregateColumns()`.
+
+**KPIs:** attended = present + late + early_leave + late_early + incomplete; working days = attended + absent;
+attendance rate = attended ÷ working days; punctuality = attended days without late minutes ÷ attended.
+
+**Dashboard** (cached 60 s per viewer scope) and five **reports** (`GET /reports/{report}`: attendance-summary, register,
+exceptions, leave, overtime; ≤ 92 days). **Exports** (`POST /reports/exports`, CSV/XLSX via openspout, ≤ 366 days)
+are generated in the queue, downloadable by the requester only, deleted after 7 days by `reports:prune-exports`.
+Permissions `reports.view`, `reports.export` (HR, Department Manager).
+
+**Screens:** Reports section — Dashboard, Attendance summary, Monthly register, Late and absent, Leave taken, Overtime
+report, Exports; an Export menu on each report.
+
+Full detail: [modules/reports.md](modules/reports.md).
+
 ---
 
 ## 13. Planned modules and their domain rules
 
 These rules are fixed by CLAUDE.md and must be honoured when the modules are built. Each still gets its own
 plan and approval.
-
-**Module 8 — Reports & Analytics.** Database-level aggregation, daily summary tables, covering indexes,
-cached dashboards with tenant-aware keys, exports in queues. Recharts on the frontend.
 
 **Module 9 — Hardening.** Performance, security review, operational polish.
 
@@ -759,6 +777,8 @@ the origin to `SANCTUM_STATEFUL_DOMAINS`.
 | `php artisan punches:simulate --tenant=acme` | punches from real schedules (`--http --key=…` posts through the API; `--overtime-rate` sets who stays late) |
 | `php artisan attendance:close-days` | re-evaluate recent days (scheduled every 15 minutes) |
 | `php artisan leave:accrue` | leave grants, accruals, carry-forward, expiry (scheduled hourly, idempotent) |
+| `php artisan reports:rebuild-stats [--tenant= --from= --to=]` | queue a rebuild of the report rollup (once on workspaces with earlier attendance) |
+| `php artisan reports:prune-exports` | delete expired report export files (scheduled daily) |
 | `php artisan schedule:work` | run the scheduler locally |
 | `composer test` | Pest |
 | `./vendor/bin/pint` / `--test` | format / check PHP style |
@@ -895,6 +915,8 @@ local dev.
 - A pending punch correction cannot be withdrawn by its requester.
 - Leave: half days only (no hourly leave), no attachments yet (Hardening), no automatic cancellation of future leave on termination, year-end carry is not redone for late changes in a closed leave year.
 - Overtime: no payroll period locking (a recalculation can reopen paid overtime, flagged `changed_after_decision`), one rule set per workspace, weighted minutes only (no money), no pre-approval, work on full leave days only via manual entries.
+- Reports: no PDF, scheduled or emailed reports; leave and overtime reports ignore location/group and use the current
+  department; a large backfill refreshes each date once per recalculated employee; no payroll period locking yet.
 - Temporary schedules are per employee only; moving holidays (Eid, etc.) are entered each year.
 - Schedule rows whose department/group/employee was deleted show as "Deleted" and are ignored.
 - OpenAPI spec is hand-maintained; keep it in sync with routes and resources.
