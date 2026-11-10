@@ -1,3 +1,4 @@
+import { LockedPeriodsNote } from '@/features/payroll/locked-periods-note'
 import { DataTable, type Column } from '@/components/data-table'
 import { PageHeader } from '@/components/states'
 import { StatusBadge } from '@/components/status-badge'
@@ -99,6 +100,7 @@ export function ExceptionsPage() {
         </TabsList>
       </Tabs>
       <ReportFilters list={list} range={range} />
+      <LockedPeriodsNote periods={report.data?.meta.locked_periods} />
       {range.error === null && (
         <DataTable
           caption={`${current.label} days`}

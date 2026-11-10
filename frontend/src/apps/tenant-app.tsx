@@ -20,6 +20,7 @@ import {
   Hourglass,
   Inbox,
   Loader2,
+  LockKeyhole,
   MapPin,
   Network,
   PencilLine,
@@ -48,6 +49,7 @@ import { LeaveCalendarPage } from '@/features/leave/leave-calendar-page'
 import { LeaveRequestsPage } from '@/features/leave/leave-requests-page'
 import { LeaveTypesPage } from '@/features/leave/leave-types-page'
 import { MyLeavePage } from '@/features/leave/my-leave-page'
+import { PayrollPeriodsPage } from '@/features/payroll/payroll-periods-page'
 import { MyOvertimePage } from '@/features/overtime/my-overtime-page'
 import { OvertimePage } from '@/features/overtime/overtime-page'
 import { OvertimeSummaryPage } from '@/features/overtime/overtime-summary-page'
@@ -255,6 +257,13 @@ function TenantLayout() {
     { to: '/groups', label: 'Groups', icon: UsersRound, section: 'Organization', visible: can('groups.view') },
     { to: '/locations', label: 'Locations', icon: MapPin, section: 'Organization', visible: can('locations.view') },
     { to: '/organization', label: 'Organization', icon: Building, section: 'Organization', visible: can('organization.view') },
+    {
+      to: '/payroll-periods',
+      label: 'Payroll periods',
+      icon: LockKeyhole,
+      section: 'Administration',
+      visible: can('payroll-periods.view'),
+    },
     { to: '/users', label: 'Users', icon: Users, section: 'Administration', visible: can('users.view') },
     { to: '/settings', label: 'Settings', icon: Settings, section: 'Administration', visible: can('settings.view') },
     { to: '/audit-log', label: 'Audit log', icon: ScrollText, section: 'Administration', visible: can('audit-logs.view') },
@@ -342,6 +351,7 @@ export function TenantApp({ subdomain }: { subdomain: string }) {
                       { path: '/shifts', element: <ShiftsPage /> },
                       { path: '/shifts/:id', element: <ShiftDetailPage /> },
                     ]),
+                    guarded('payroll-periods.view', [{ path: '/payroll-periods', element: <PayrollPeriodsPage /> }]),
                     guarded('users.view', [{ path: '/users', element: <UsersPage /> }]),
                     guarded('settings.view', [{ path: '/settings', element: <SettingsPage /> }]),
                     guarded('audit-logs.view', [{ path: '/audit-log', element: <AuditLogPage /> }]),

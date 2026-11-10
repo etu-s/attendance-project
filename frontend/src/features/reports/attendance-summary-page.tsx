@@ -1,3 +1,4 @@
+import { LockedPeriodsNote } from '@/features/payroll/locked-periods-note'
 import { DataTable, type Column } from '@/components/data-table'
 import { PageHeader } from '@/components/states'
 import { formatMinutes } from '@/features/attendance/status'
@@ -79,6 +80,7 @@ export function AttendanceSummaryPage() {
         }
       />
       <ReportFilters list={list} range={range} />
+      <LockedPeriodsNote periods={report.data?.meta.locked_periods} />
       {range.error === null && (
         <DataTable
           caption="Attendance summary per employee"

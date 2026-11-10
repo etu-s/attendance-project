@@ -1,3 +1,4 @@
+import { LockedPeriodsNote } from '@/features/payroll/locked-periods-note'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { EmptyState, ErrorState, PageHeader } from '@/components/states'
 import { Button } from '@/components/ui/button'
@@ -88,6 +89,7 @@ export function RegisterPage() {
         </div>
         <ReportFilters list={list} month={{ value: month, onChange: (v) => list.setFilter('month', v) }} />
       </div>
+      <LockedPeriodsNote periods={report.data?.meta.locked_periods} />
 
       <ul className="text-muted-foreground flex flex-wrap gap-x-4 gap-y-1 text-xs" aria-label="Codes">
         {legend.map((s) => (

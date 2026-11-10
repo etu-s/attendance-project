@@ -1,6 +1,7 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { tenantApi } from '@/lib/api/client'
 import type { ListParams, Paginated, Resource } from '@/lib/api/types'
+import type { LockedPeriodRef } from '@/features/payroll/api'
 import type { AttendanceStatus } from '@/features/attendance/api'
 
 export type ReportKind = 'attendance-summary' | 'register' | 'exceptions' | 'leave' | 'overtime'
@@ -39,6 +40,8 @@ export interface Kpis {
 /** Mirrors DashboardService.php. */
 export interface Dashboard {
   range: { from: string; to: string }
+  /** Locked payroll periods in the range (not cached). */
+  locked_periods: LockedPeriodRef[]
   source: 'rollup' | 'live'
   kpis: Kpis & {
     overtime_approved_minutes: number
@@ -121,7 +124,9 @@ export interface OvertimeRow {
 }
 
 /** A report page: Paginated plus report-specific meta. */
-export type ReportPage<T, M = object> = Omit<Paginated<T>, 'meta'> & { meta: Paginated<T>['meta'] & M }
+export type ReportPage<T, M = object> = Omit<Paginated<T>, 'meta'> & {
+  meta: Paginated<T>['meta'] & M & { locked_periods: LockedPeriodRef[] }
+}
 
 /** Mirrors ReportExportResource.php. */
 export interface ReportExport {

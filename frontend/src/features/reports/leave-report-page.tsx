@@ -1,3 +1,4 @@
+import { LockedPeriodsNote } from '@/features/payroll/locked-periods-note'
 import { DataTable, type Column } from '@/components/data-table'
 import { PageHeader } from '@/components/states'
 import { useListParams } from '@/hooks/use-list-params'
@@ -53,6 +54,7 @@ export function LeaveReportPage() {
         }
       />
       <ReportFilters list={list} range={range} location={false} group={false} />
+      <LockedPeriodsNote periods={report.data?.meta.locked_periods} />
       {range.error === null && (
         <DataTable
           caption="Leave taken per employee"

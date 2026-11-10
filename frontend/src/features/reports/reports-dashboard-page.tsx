@@ -1,3 +1,4 @@
+import { LockedPeriodsNote } from '@/features/payroll/locked-periods-note'
 import type { ReactNode } from 'react'
 import { Link } from 'react-router'
 import { EmptyState, ErrorState, PageHeader } from '@/components/states'
@@ -113,6 +114,7 @@ export function ReportsDashboardPage() {
         description="Attendance rate counts working days only: leave, holidays and rest days are left out."
       />
       <ReportFilters list={list} range={range} search={false} />
+      <LockedPeriodsNote periods={dashboard.data?.locked_periods} />
 
       {range.error ? null : dashboard.isError ? (
         <ErrorState error={dashboard.error} onRetry={() => dashboard.refetch()} />
