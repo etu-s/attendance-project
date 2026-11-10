@@ -26,7 +26,7 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function (): void {
     Route::get('me/employee', MyEmployeeController::class)->name('me.employee');
 
     // Registered before the resource so "import" is never read as an {employee} id.
-    Route::post('employees/import', [EmployeeImportController::class, 'store'])->name('employees.import');
+    Route::post('employees/import', [EmployeeImportController::class, 'store'])->middleware('throttle:heavy')->name('employees.import');
     Route::get('employee-imports', [EmployeeImportController::class, 'index'])->name('employee-imports.index');
     Route::get('employee-imports/{employeeImport}', [EmployeeImportController::class, 'show'])->name('employee-imports.show');
 

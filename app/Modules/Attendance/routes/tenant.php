@@ -39,7 +39,7 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function (): void {
 
     Route::get('attendance', [AttendanceController::class, 'index'])->name('attendance.index');
     Route::get('attendance/summary', [AttendanceController::class, 'summary'])->name('attendance.summary');
-    Route::post('attendance/recalculate', [AttendanceController::class, 'recalculate'])->name('attendance.recalculate');
+    Route::post('attendance/recalculate', [AttendanceController::class, 'recalculate'])->middleware('throttle:heavy')->name('attendance.recalculate');
     Route::get('attendance/{attendanceDay}', [AttendanceController::class, 'show'])->whereNumber('attendanceDay')->name('attendance.show');
     Route::get('employees/{employee}/attendance', [AttendanceController::class, 'employee'])->name('employees.attendance');
     Route::get('me/attendance', [AttendanceController::class, 'mine'])->name('me.attendance');

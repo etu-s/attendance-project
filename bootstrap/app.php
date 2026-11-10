@@ -3,6 +3,7 @@
 use App\Modules\Central\Http\Middleware\EnsureCentralDomain;
 use App\Modules\Central\Http\Middleware\EnsureTenantIsActive;
 use App\Modules\Core\Http\Middleware\ScopeSessionToTenant;
+use App\Modules\Core\Http\Middleware\SecurityHeaders;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -20,6 +21,8 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         // Cookie-based Sanctum SPA auth for requests from the frontend origins.
         $middleware->statefulApi();
+
+        $middleware->append(SecurityHeaders::class);
 
         // API only: never redirect unauthenticated requests to a login page.
         $middleware->redirectGuestsTo(fn () => null);

@@ -7,7 +7,8 @@ use App\Modules\Core\Http\Controllers\HealthController;
 use App\Modules\Core\Http\Controllers\SettingsController;
 use Illuminate\Support\Facades\Route;
 
-Route::get('health', HealthController::class)->name('health');
+// Public (load balancers, uptime checks): rate limited per IP like any guest.
+Route::get('health', HealthController::class)->middleware('throttle:api')->name('health');
 
 Route::middleware(['auth:sanctum', 'throttle:api'])->group(function (): void {
     Route::get('settings', [SettingsController::class, 'index'])->name('settings.index');

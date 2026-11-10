@@ -44,9 +44,17 @@ return [
         'max_pending_exports' => 5,
     ],
 
+    'security' => [
+        // Strict-Transport-Security max-age in seconds, sent over HTTPS only. 0 = off (local).
+        // Production: 31536000 once every subdomain is served over HTTPS.
+        'hsts_max_age' => (int) env('HSTS_MAX_AGE', 0),
+    ],
+
     'rate_limits' => [
         'login_per_minute' => (int) env('LOGIN_RATE_LIMIT', 5),
         'api_per_minute' => (int) env('API_RATE_LIMIT', 120),
+        // Expensive writes per user: exports, recalculations, imports.
+        'heavy_per_minute' => (int) env('HEAVY_RATE_LIMIT', 10),
         // Per punch source key on one tenant host (POST /punches, /punches/batch).
         'punches_per_minute' => (int) env('PUNCH_RATE_LIMIT', 600),
     ],

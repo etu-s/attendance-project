@@ -10,7 +10,7 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function (): void {
     Route::get('overtime', [OvertimeController::class, 'index'])->name('overtime.index');
     Route::get('overtime/summary', [OvertimeController::class, 'summary'])->name('overtime.summary');
     Route::post('overtime/approve-batch', [OvertimeController::class, 'approveBatch'])->name('overtime.approve-batch');
-    Route::post('overtime/recalculate', [OvertimeController::class, 'recalculate'])->name('overtime.recalculate');
+    Route::post('overtime/recalculate', [OvertimeController::class, 'recalculate'])->middleware('throttle:heavy')->name('overtime.recalculate');
     Route::post('overtime/{overtimeRecord}/approve', [OvertimeController::class, 'approve'])->whereNumber('overtimeRecord')->name('overtime.approve');
     Route::post('overtime/{overtimeRecord}/reject', [OvertimeController::class, 'reject'])->whereNumber('overtimeRecord')->name('overtime.reject');
 

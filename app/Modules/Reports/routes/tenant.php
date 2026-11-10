@@ -11,7 +11,7 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function (): void {
     Route::get('reports/dashboard', [ReportController::class, 'dashboard'])->name('reports.dashboard');
 
     Route::get('reports/exports', [ReportExportController::class, 'index'])->name('reports.exports.index');
-    Route::post('reports/exports', [ReportExportController::class, 'store'])->name('reports.exports.store');
+    Route::post('reports/exports', [ReportExportController::class, 'store'])->middleware('throttle:heavy')->name('reports.exports.store');
     Route::get('reports/exports/{reportExport}', [ReportExportController::class, 'show'])->whereNumber('reportExport')->name('reports.exports.show');
     Route::get('reports/exports/{reportExport}/download', [ReportExportController::class, 'download'])->whereNumber('reportExport')->name('reports.exports.download');
 
