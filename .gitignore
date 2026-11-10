@@ -44,3 +44,6 @@ Thumbs.db
 # Local tooling (machine-specific paths/ports)
 /.claude/launch.json
 /storage/tmp/
+
+# Per-tenant storage (report exports etc.), created by the tenancy filesystem bootstrapper
+/storage/tenant*/
