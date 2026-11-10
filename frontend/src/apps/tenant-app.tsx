@@ -8,11 +8,14 @@ import {
   CalendarHeart,
   CalendarRange,
   CalendarSync,
+  ChartColumn,
   ClipboardList,
   Clock,
   LayoutGrid,
   Contact,
+  FileDown,
   Fingerprint,
+  Grid3x3,
   Home,
   Hourglass,
   Inbox,
@@ -21,13 +24,17 @@ import {
   Network,
   PencilLine,
   Plane,
+  PlaneTakeoff,
   RadioTower,
   ScanSearch,
   ScrollText,
   Sigma,
   Tags,
   Timer,
+  TimerReset,
+  TriangleAlert,
   Settings,
+  Sheet,
   UserRound,
   Users,
   UsersRound,
@@ -44,6 +51,13 @@ import { MyLeavePage } from '@/features/leave/my-leave-page'
 import { MyOvertimePage } from '@/features/overtime/my-overtime-page'
 import { OvertimePage } from '@/features/overtime/overtime-page'
 import { OvertimeSummaryPage } from '@/features/overtime/overtime-summary-page'
+import { AttendanceSummaryPage } from '@/features/reports/attendance-summary-page'
+import { ExceptionsPage } from '@/features/reports/exceptions-page'
+import { ExportsPage } from '@/features/reports/exports-page'
+import { LeaveReportPage } from '@/features/reports/leave-report-page'
+import { OvertimeReportPage } from '@/features/reports/overtime-report-page'
+import { RegisterPage } from '@/features/reports/register-page'
+import { ReportsDashboardPage } from '@/features/reports/reports-dashboard-page'
 import { CorrectionsPage } from '@/features/attendance/corrections-page'
 import { MyAttendancePage } from '@/features/attendance/my-attendance-page'
 import { OrphanPunchesPage } from '@/features/attendance/orphan-punches-page'
@@ -189,6 +203,19 @@ function TenantLayout() {
     { to: '/leave-types', label: 'Leave types', icon: Tags, section: 'Leave', visible: can('leave.manage') },
     { to: '/overtime', label: 'Overtime', icon: Hourglass, section: 'Overtime', visible: can('overtime.view') },
     { to: '/overtime-summary', label: 'Overtime summary', icon: Sigma, section: 'Overtime', visible: can('overtime.view') },
+    { to: '/reports', label: 'Dashboard', icon: ChartColumn, section: 'Reports', end: true, visible: can('reports.view') },
+    { to: '/reports/attendance', label: 'Attendance summary', icon: Sheet, section: 'Reports', visible: can('reports.view') },
+    { to: '/reports/register', label: 'Monthly register', icon: Grid3x3, section: 'Reports', visible: can('reports.view') },
+    {
+      to: '/reports/exceptions',
+      label: 'Late and absent',
+      icon: TriangleAlert,
+      section: 'Reports',
+      visible: can('reports.view'),
+    },
+    { to: '/reports/leave', label: 'Leave taken', icon: PlaneTakeoff, section: 'Reports', visible: can('reports.view') },
+    { to: '/reports/overtime', label: 'Overtime report', icon: TimerReset, section: 'Reports', visible: can('reports.view') },
+    { to: '/reports/exports', label: 'Exports', icon: FileDown, section: 'Reports', visible: can('reports.export') },
     { to: '/schedules', label: 'Schedules', icon: CalendarDays, section: 'Scheduling', visible: can('schedules.view') },
     { to: '/roster', label: 'Roster', icon: LayoutGrid, section: 'Scheduling', visible: can('schedules.view') },
     { to: '/holidays', label: 'Holidays', icon: CalendarHeart, section: 'Scheduling', visible: can('holidays.view') },
@@ -262,6 +289,15 @@ export function TenantApp({ subdomain }: { subdomain: string }) {
                       { path: '/overtime', element: <OvertimePage /> },
                       { path: '/overtime-summary', element: <OvertimeSummaryPage /> },
                     ]),
+                    guarded('reports.view', [
+                      { path: '/reports', element: <ReportsDashboardPage /> },
+                      { path: '/reports/attendance', element: <AttendanceSummaryPage /> },
+                      { path: '/reports/register', element: <RegisterPage /> },
+                      { path: '/reports/exceptions', element: <ExceptionsPage /> },
+                      { path: '/reports/leave', element: <LeaveReportPage /> },
+                      { path: '/reports/overtime', element: <OvertimeReportPage /> },
+                    ]),
+                    guarded('reports.export', [{ path: '/reports/exports', element: <ExportsPage /> }]),
                     guarded('schedules.view', [
                       { path: '/schedules', element: <SchedulesPage /> },
                       { path: '/roster', element: <RosterPage /> },
