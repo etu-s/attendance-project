@@ -1,10 +1,11 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Loader2 } from 'lucide-react'
 import { useEffect } from 'react'
-import { Controller, useForm } from 'react-hook-form'
+import { Controller, useForm, useWatch } from 'react-hook-form'
 import { toast } from 'sonner'
 import { Field } from '@/components/form-field'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -23,7 +24,7 @@ interface UserFormDialogProps {
   isSelf?: boolean
 }
 
-const fields = ['name', 'email', 'password', 'role', 'status'] as const
+const fields = ['name', 'email', 'password', 'role', 'status', 'invite'] as const
 
 export function UserFormDialog({ open, onOpenChange, user, assignableRoles, isSelf = false }: UserFormDialogProps) {
   const editing = user !== undefined
@@ -33,7 +34,7 @@ export function UserFormDialog({ open, onOpenChange, user, assignableRoles, isSe
   // One form type for both modes; the resolver switches the password rule.
   const form = useForm<UpdateUserValues>({
     resolver: zodResolver(editing ? updateUserSchema : createUserSchema),
-    defaultValues: { name: '', email: '', password: '', role: 'employee', status: 'active' },
+    defaultValues: { name: '', email: '', password: '', role: 'employee', status: 'active', invite: true },
   })
 
   // Reset only when the dialog opens or targets another user: a new
@@ -47,9 +48,10 @@ export function UserFormDialog({ open, onOpenChange, user, assignableRoles, isSe
         password: '',
         role: user?.role ?? defaultRole,
         status: user?.status ?? 'active',
+        invite: !editing,
       })
     }
-  }, [open, user, defaultRole, form])
+  }, [open, user, editing, defaultRole, form])
 
   const submit = form.handleSubmit(async (values) => {
     try {
@@ -63,8 +65,9 @@ export function UserFormDialog({ open, onOpenChange, user, assignableRoles, isSe
         await updateUser.mutateAsync({ id: user.id, payload })
         toast.success('User updated.')
       } else {
-        await createUser.mutateAsync({ ...values, password: values.password })
-        toast.success('User created.')
+        const { invite, password, ...rest } = values
+        await createUser.mutateAsync(invite ? { ...rest, invite: true } : { ...rest, password })
+        toast.success(invite ? `User created; an invitation was emailed to ${values.email}.` : 'User created.')
       }
       onOpenChange(false)
     } catch (error) {
@@ -73,6 +76,7 @@ export function UserFormDialog({ open, onOpenChange, user, assignableRoles, isSe
   })
 
   const errors = form.formState.errors
+  const invite = useWatch({ control: form.control, name: 'invite' })
   // A role the actor may not assign (e.g. an HR manager viewing an admin) is shown but not selectable.
   const roleOptions = user?.role && !assignableRoles.includes(user.role) ? [user.role, ...assignableRoles] : assignableRoles
 
@@ -93,13 +97,32 @@ export function UserFormDialog({ open, onOpenChange, user, assignableRoles, isSe
           <Field label="Email" error={errors.email?.message}>
             <Input type="email" autoComplete="off" {...form.register('email')} />
           </Field>
-          <Field
-            label={editing ? 'New password' : 'Password'}
-            error={errors.password?.message}
-            hint={editing ? 'Leave empty to keep the current password.' : 'At least 8 characters with letters and numbers.'}
-          >
-            <Input type="password" autoComplete="new-password" {...form.register('password')} />
-          </Field>
+          {!editing && (
+            <Controller
+              control={form.control}
+              name="invite"
+              render={({ field }) => (
+                <label className="flex items-start gap-2 text-sm">
+                  <Checkbox checked={field.value} onCheckedChange={(c) => field.onChange(c === true)} className="mt-0.5" />
+                  <span>
+                    Email an invitation
+                    <span className="text-muted-foreground block text-xs">
+                      They choose their own password; the link works for 7 days.
+                    </span>
+                  </span>
+                </label>
+              )}
+            />
+          )}
+          {(editing || !invite) && (
+            <Field
+              label={editing ? 'New password' : 'Password'}
+              error={errors.password?.message}
+              hint={editing ? 'Leave empty to keep the current password.' : 'At least 8 characters with letters and numbers.'}
+            >
+              <Input type="password" autoComplete="new-password" {...form.register('password')} />
+            </Field>
+          )}
 
           <div className="grid gap-4 sm:grid-cols-2">
             <Controller

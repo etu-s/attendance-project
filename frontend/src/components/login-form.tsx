@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Loader2 } from 'lucide-react'
 import { useForm } from 'react-hook-form'
@@ -12,9 +13,11 @@ interface LoginFormProps {
   title: string
   description: string
   onSubmit: (values: LoginValues) => Promise<unknown>
+  /** Shown under the form, e.g. a "Forgot password?" link. */
+  footer?: ReactNode
 }
 
-export function LoginForm({ title, description, onSubmit }: LoginFormProps) {
+export function LoginForm({ title, description, onSubmit, footer }: LoginFormProps) {
   const form = useForm<LoginValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: '', password: '' },
@@ -48,6 +51,7 @@ export function LoginForm({ title, description, onSubmit }: LoginFormProps) {
               Sign in
             </Button>
           </form>
+          {footer && <div className="mt-4 text-center text-sm">{footer}</div>}
         </CardContent>
       </Card>
     </main>

@@ -21,7 +21,12 @@ uses(RefreshDatabase::class);
  */
 const PUBLIC_API_ROUTES = [
     'POST api/v1/auth/login',
+    'POST api/v1/auth/forgot-password',
+    'POST api/v1/auth/reset-password',
+    'POST api/v1/auth/accept-invitation',
     'POST api/v1/central/auth/login',
+    'POST api/v1/central/auth/forgot-password',
+    'POST api/v1/central/auth/reset-password',
     'GET api/v1/health',
 ];
 

@@ -5,9 +5,13 @@ declare(strict_types=1);
 namespace App\Modules\Identity\Http\Controllers;
 
 use App\Modules\Core\Http\Controllers\Controller;
+use App\Modules\Core\Http\Requests\ForgotPasswordRequest;
 use App\Modules\Core\Http\Requests\LoginRequest;
+use App\Modules\Core\Http\Requests\SetPasswordRequest;
 use App\Modules\Identity\Http\Resources\AuthenticatedUserResource;
 use App\Modules\Identity\Models\User;
+use App\Modules\Identity\Services\PasswordLinkService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Auth;
@@ -44,6 +48,30 @@ final class AuthController extends Controller
         Auth::guard('web')->logout();
         $request->session()->invalidate();
         $request->session()->regenerateToken();
+
+        return response()->noContent();
+    }
+
+    /**
+     * Always the same answer, whether or not the email has an account.
+     */
+    public function forgotPassword(ForgotPasswordRequest $request, PasswordLinkService $links): JsonResponse
+    {
+        $links->sendReset((string) $request->validated('email'));
+
+        return response()->json(['message' => 'If an account exists for this email, we sent a link to reset the password.'], 202);
+    }
+
+    public function resetPassword(SetPasswordRequest $request, PasswordLinkService $links): Response
+    {
+        $links->reset('users', $request->credentials());
+
+        return response()->noContent();
+    }
+
+    public function acceptInvitation(SetPasswordRequest $request, PasswordLinkService $links): Response
+    {
+        $links->reset('invitations', $request->credentials());
 
         return response()->noContent();
     }

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { MoreHorizontal, Pencil, Plus, Trash2 } from 'lucide-react'
+import { Mail, MoreHorizontal, Pencil, Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { DataTable, type Column } from '@/components/data-table'
@@ -19,7 +19,7 @@ import { useCan, useDisplayPreferences, useSession } from '@/features/tenant-aut
 import { useListParams } from '@/hooks/use-list-params'
 import { formatDate, formatDateTime } from '@/lib/format'
 import { errorMessage } from '@/lib/forms'
-import { useDeleteUser, useUsers } from './api'
+import { useDeleteUser, useInviteUser, useUsers } from './api'
 import { UserFormDialog } from './user-form-dialog'
 import { roleLabels, roles, type Role, type User } from './types'
 
@@ -36,6 +36,7 @@ export function UsersPage() {
   const [editing, setEditing] = useState<User | null>(null)
   const [creating, setCreating] = useState(false)
   const [deleting, setDeleting] = useState<User | null>(null)
+  const inviteUser = useInviteUser()
 
   const iAmAdmin = me.role === 'tenant-admin'
   // Mirrors ValidatesRoleAssignment: only a Tenant Admin may hand out Tenant Admin.
@@ -102,6 +103,18 @@ export function UsersPage() {
               {canEdit(user) && (
                 <DropdownMenuItem onSelect={() => setEditing(user)}>
                   <Pencil /> Edit
+                </DropdownMenuItem>
+              )}
+              {canEdit(user) && user.status === 'active' && (
+                <DropdownMenuItem
+                  onSelect={() =>
+                    inviteUser.mutate(user.id, {
+                      onSuccess: (r) => toast.success(r.message),
+                      onError: (e) => toast.error(errorMessage(e)),
+                    })
+                  }
+                >
+                  <Mail /> Send invitation
                 </DropdownMenuItem>
               )}
               {canEdit(user) && canDelete(user) && <DropdownMenuSeparator />}

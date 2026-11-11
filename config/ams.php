@@ -9,6 +9,11 @@ declare(strict_types=1);
  */
 return [
 
+    // Where the SPA runs, for links in emails (password reset, invitations).
+    // A tenant's link puts its subdomain in front of this host:
+    // http://localhost:5180 -> http://acme.localhost:5180.
+    'frontend_url' => env('FRONTEND_URL', 'http://localhost:5173'),
+
     // Subdomains a tenant may never claim because they collide with app hosts.
     'reserved_subdomains' => ['www', 'api', 'app', 'admin', 'central', 'mail', 'static', 'assets', 'status'],
 

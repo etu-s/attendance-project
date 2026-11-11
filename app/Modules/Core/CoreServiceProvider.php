@@ -125,6 +125,11 @@ final class CoreServiceProvider extends ModuleServiceProvider
         RateLimiter::for('api', fn (Request $request) => Limit::perMinute((int) config('ams.rate_limits.api_per_minute'))
             ->by($request->getHost().'|'.($request->user()?->getAuthIdentifier() ?? $request->ip())));
 
+        // Forgot / reset password and invitations: like login, but a separate
+        // budget, so asking for links never locks anyone out of signing in.
+        RateLimiter::for('password', fn (Request $request) => Limit::perMinute((int) config('ams.rate_limits.login_per_minute'))
+            ->by('password|'.$request->getHost().'|'.mb_strtolower((string) $request->input('email')).'|'.$request->ip()));
+
         // Exports, recalculations and imports queue heavy work: a much lower limit, on top of `api`.
         RateLimiter::for('heavy', fn (Request $request) => Limit::perMinute((int) config('ams.rate_limits.heavy_per_minute'))
             ->by('heavy|'.$request->getHost().'|'.($request->user()?->getAuthIdentifier() ?? $request->ip())));

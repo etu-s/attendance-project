@@ -1,7 +1,9 @@
 import { Building2, Layers, Loader2 } from 'lucide-react'
-import { createBrowserRouter, Navigate, Outlet, RouterProvider } from 'react-router'
+import { createBrowserRouter, Link, Navigate, Outlet, RouterProvider } from 'react-router'
 import { AppShell } from '@/components/app-shell'
 import { LoginForm } from '@/components/login-form'
+import { ForgotPasswordPage, SetPasswordPage } from '@/features/password-links/password-pages'
+import { centralApi } from '@/lib/api/client'
 import { FullPageMessage } from '@/components/states'
 import { Button } from '@/components/ui/button'
 import { useAdmin, useAdminLogin, useAdminLogout, useAdminSessionQuery } from '@/features/central-auth/api'
@@ -46,6 +48,11 @@ function LoginPage() {
       title="Platform admin"
       description="Sign in to manage tenants and plans."
       onSubmit={(values) => login.mutateAsync(values)}
+      footer={
+        <Link to="/forgot-password" className="text-muted-foreground underline underline-offset-4">
+          Forgot your password?
+        </Link>
+      }
     />
   )
 }
@@ -80,6 +87,22 @@ const router = createBrowserRouter([
     element: <Gate />,
     children: [
       { path: '/login', element: <LoginPage /> },
+      {
+        path: '/forgot-password',
+        element: <ForgotPasswordPage api={centralApi} description="Enter the email of your admin account." />,
+      },
+      {
+        path: '/reset-password',
+        element: (
+          <SetPasswordPage
+            api={centralApi}
+            endpoint="/auth/reset-password"
+            title="Choose a new password"
+            description="Set a new password for your admin account"
+            done="Password changed. Sign in with the new one."
+          />
+        ),
+      },
       {
         element: <RequireAdmin />,
         children: [

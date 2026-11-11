@@ -40,9 +40,24 @@ return [
     ],
 
     'passwords' => [
+        // Tenant users ("Forgot password"); the table lives in each tenant DB.
         'users' => [
             'provider' => 'users',
             'table' => 'password_reset_tokens',
+            'expire' => 60,
+            'throttle' => 60,
+        ],
+        // Invitations to set a first password: same table, a week to accept.
+        'invitations' => [
+            'provider' => 'users',
+            'table' => 'password_reset_tokens',
+            'expire' => 7 * 24 * 60,
+            'throttle' => 0,
+        ],
+        // Super admins (central DB).
+        'super_admins' => [
+            'provider' => 'super_admins',
+            'table' => 'super_admin_password_reset_tokens',
             'expire' => 60,
             'throttle' => 60,
         ],

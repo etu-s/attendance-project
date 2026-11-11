@@ -11,6 +11,11 @@ Route::post('auth/login', [AuthController::class, 'login'])
     ->middleware('throttle:login')
     ->name('auth.login');
 
+Route::middleware('throttle:password')->group(function (): void {
+    Route::post('auth/forgot-password', [AuthController::class, 'forgotPassword'])->name('auth.forgot-password');
+    Route::post('auth/reset-password', [AuthController::class, 'resetPassword'])->name('auth.reset-password');
+});
+
 Route::middleware(['auth:central', 'throttle:api'])->group(function (): void {
     Route::post('auth/logout', [AuthController::class, 'logout'])->name('auth.logout');
     Route::get('auth/me', [AuthController::class, 'me'])->name('auth.me');

@@ -29,7 +29,9 @@ class StoreUserRequest extends FormRequest
             'name' => ['required', 'string', 'max:120'],
             // Checks soft-deleted rows too: a deleted user's email stays reserved (see users migration).
             'email' => ['required', 'string', 'email', 'max:255', Rule::unique(User::class, 'email')],
-            'password' => ['required', 'string', Password::min(8)->letters()->numbers()],
+            // With `invite`, no password: the user sets one from the emailed link.
+            'invite' => ['sometimes', 'boolean'],
+            'password' => [Rule::requiredIf(! $this->boolean('invite')), 'prohibited_if:invite,true,1', 'nullable', 'string', Password::min(8)->letters()->numbers()],
             'role' => ['required', 'string', $this->assignableRoles()],
             'status' => ['sometimes', Rule::enum(UserStatus::class)],
         ];

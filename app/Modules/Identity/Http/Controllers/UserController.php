@@ -42,6 +42,17 @@ final class UserController extends Controller
             ->setStatusCode(201);
     }
 
+    /**
+     * (Re)sends an invitation to set a password; the link replaces earlier ones.
+     */
+    public function invite(User $user): JsonResponse
+    {
+        $this->authorize('update', $user);
+        $this->users->invite($user);
+
+        return response()->json(['message' => "Invitation sent to {$user->email}."], 202);
+    }
+
     public function show(User $user): UserResource
     {
         $this->authorize('view', $user);

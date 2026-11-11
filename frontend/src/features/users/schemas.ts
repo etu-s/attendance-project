@@ -17,9 +17,13 @@ const base = {
   email: z.email('Enter a valid email address.').max(255),
   role: z.enum(roles, { error: 'Choose a role.' }),
   status: z.enum(userStatuses),
+  // Create only: email an invitation instead of setting a password.
+  invite: z.boolean(),
 }
 
-export const createUserSchema = z.object({ ...base, password })
+export const createUserSchema = z
+  .object({ ...base, password: z.union([z.literal(''), password]) })
+  .refine((v) => v.invite || v.password !== '', { path: ['password'], message: 'Set a password, or send an invitation.' })
 
 export const updateUserSchema = z.object({
   ...base,
@@ -29,4 +33,6 @@ export const updateUserSchema = z.object({
 
 export type CreateUserValues = z.infer<typeof createUserSchema>
 export type UpdateUserValues = z.infer<typeof updateUserSchema>
-export type UserPayload = CreateUserValues
+
+/** What POST /users takes: a password, or `invite: true` without one. */
+export type UserPayload = Omit<CreateUserValues, 'password' | 'invite'> & { password?: string; invite?: boolean }

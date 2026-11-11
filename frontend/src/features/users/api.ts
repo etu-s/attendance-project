@@ -47,3 +47,10 @@ export function useDeleteUser() {
     onSuccess: invalidate,
   })
 }
+
+/** (Re)sends an invitation email to set a password; the new link replaces earlier ones. */
+export function useInviteUser() {
+  return useMutation({
+    mutationFn: (id: number) => tenantApi.post<{ message: string }>(`/users/${String(id)}/invitation`),
+  })
+}

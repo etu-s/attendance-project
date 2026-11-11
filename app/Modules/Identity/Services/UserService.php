@@ -29,6 +29,7 @@ final class UserService
 {
     public function __construct(
         private readonly AuditLogger $audit,
+        private readonly PasswordLinkService $links,
     ) {}
 
     /**
@@ -56,18 +57,22 @@ final class UserService
     }
 
     /**
-     * @param  array{name: string, email: string, password: string, role: string, status?: string}  $data
+     * With `invite`, the account gets a password nobody knows and an
+     * invitation email (sent after the transaction commits).
+     *
+     * @param  array{name: string, email: string, password?: string|null, invite?: bool, role: string, status?: string}  $data
      */
     public function create(array $data, ?User $actor): User
     {
         $role = RoleName::from($data['role']);
         $this->assertMayAssign($actor, $role);
+        $invite = (bool) ($data['invite'] ?? false);
 
-        return DB::transaction(function () use ($data, $role): User {
+        $user = DB::transaction(function () use ($data, $role, $invite): User {
             $user = User::query()->create([
                 'name' => $data['name'],
                 'email' => mb_strtolower($data['email']),
-                'password' => $data['password'],
+                'password' => $invite ? PasswordLinkService::unusablePassword() : $data['password'],
                 'status' => $data['status'] ?? UserStatus::Active->value,
             ]);
 
@@ -75,6 +80,25 @@ final class UserService
 
             return $user->load('roles');
         });
+
+        if ($invite) {
+            $this->links->sendInvitation($user);
+        }
+
+        return $user;
+    }
+
+    /**
+     * Sends (again) an invitation to set a password. Who may do it is
+     * UserPolicy's `update` (checked by the controller).
+     */
+    public function invite(User $user): void
+    {
+        if ($user->status !== UserStatus::Active) {
+            throw new BusinessRuleException('Activate this account before inviting it.', 'user_inactive', 409);
+        }
+
+        $this->links->sendInvitation($user);
     }
 
     /**

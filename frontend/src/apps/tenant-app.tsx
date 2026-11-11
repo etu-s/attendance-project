@@ -49,6 +49,7 @@ import { LeaveCalendarPage } from '@/features/leave/leave-calendar-page'
 import { LeaveRequestsPage } from '@/features/leave/leave-requests-page'
 import { LeaveTypesPage } from '@/features/leave/leave-types-page'
 import { MyLeavePage } from '@/features/leave/my-leave-page'
+import { ForgotPasswordPage, SetPasswordPage } from '@/features/password-links/password-pages'
 import { PayrollPeriodsPage } from '@/features/payroll/payroll-periods-page'
 import { MyOvertimePage } from '@/features/overtime/my-overtime-page'
 import { OvertimePage } from '@/features/overtime/overtime-page'
@@ -79,7 +80,7 @@ import { TimetablesPage } from '@/features/timetables/timetables-page'
 import { useCan, useLogout, useSession, useSessionQuery } from '@/features/tenant-auth/hooks'
 import { TenantLoginPage } from '@/features/tenant-auth/tenant-login-page'
 import { UsersPage } from '@/features/users/users-page'
-import { ApiError } from '@/lib/api/client'
+import { ApiError, tenantApi } from '@/lib/api/client'
 import { errorMessage } from '@/lib/forms'
 
 function Loading() {
@@ -289,6 +290,34 @@ export function TenantApp({ subdomain }: { subdomain: string }) {
           element: <SessionGate />,
           children: [
             { path: '/login', element: <TenantLoginPage subdomain={subdomain} /> },
+            {
+              path: '/forgot-password',
+              element: <ForgotPasswordPage api={tenantApi} description={`Enter the email of your ${subdomain} account.`} />,
+            },
+            {
+              path: '/reset-password',
+              element: (
+                <SetPasswordPage
+                  api={tenantApi}
+                  endpoint="/auth/reset-password"
+                  title="Choose a new password"
+                  description="Set a new password for your account"
+                  done="Password changed. Sign in with the new one."
+                />
+              ),
+            },
+            {
+              path: '/accept-invitation',
+              element: (
+                <SetPasswordPage
+                  api={tenantApi}
+                  endpoint="/auth/accept-invitation"
+                  title="Welcome"
+                  description="Set a password to start using your account"
+                  done="Your password is set. Sign in to continue."
+                />
+              ),
+            },
             {
               element: <RequireSession />,
               children: [
