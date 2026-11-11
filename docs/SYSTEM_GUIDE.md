@@ -8,7 +8,7 @@ to extend it safely. Read it once end to end before your first change, then use 
 > If something here disagrees with those files or with the code, the code and CLAUDE.md win; please fix
 > this guide.
 >
-> Last reviewed: 2026-11-11 (Modules 1–8 approved, Module 9 built and awaiting approval).
+> Last reviewed: 2026-11-11 (all nine modules approved).
 
 ---
 
@@ -75,7 +75,7 @@ before the next starts (see [§18](#18-workflow-quality-gates-and-git)).
 | 6   | Leave Management                    | Approved 2026-10-27                              | [leave.md](modules/leave.md)                     |
 | 7   | Overtime Management                 | Approved 2026-10-28                              | [overtime.md](modules/overtime.md)               |
 | 8   | Reports & Analytics                 | Approved 2026-11-10                              | [reports.md](modules/reports.md)                 |
-| 9   | Hardening                           | Built, awaiting approval (2026-11-11)            | [hardening.md](modules/hardening.md)             |
+| 9   | Hardening                           | Approved 2026-11-11                              | [hardening.md](modules/hardening.md)             |
 
 The status table in [CLAUDE.md](../CLAUDE.md) and [docs/README.md](README.md) is updated after every approval.
 Change history is in [CHANGELOG.md](../CHANGELOG.md).
@@ -667,7 +667,7 @@ report, Exports; an Export menu on each report.
 
 Full detail: [modules/reports.md](modules/reports.md).
 
-### 12.9 Module 9 — Hardening (`Payroll` + cross-cutting) — *built, awaiting approval*
+### 12.9 Module 9 — Hardening (`Payroll` + cross-cutting) — *approved 2026-11-11*
 
 - **Security:** `SecurityHeaders` middleware (strict API CSP, frame deny, HSTS over HTTPS when configured), log masking
   on every channel (`Core\Logging\MaskSensitiveData`), `heavy` / `password` rate limiters, a route audit test.

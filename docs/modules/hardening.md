@@ -1,6 +1,6 @@
 # Module 9 — Hardening
 
-Status: **built, awaiting approval** (2026-11-11)
+Status: **approved** (2026-11-11)
 
 Security, performance and operations work, plus the features earlier modules deferred here: payroll period locking,
 leave attachments, password reset and invitations, and the live Today board. Production setup is in

@@ -12,6 +12,6 @@ Start with the [System Guide](SYSTEM_GUIDE.md): architecture, tenancy, conventio
 | 6   | Leave Management                    | Approved (2026-10-27)    | [modules/leave.md](modules/leave.md) |
 | 7   | Overtime Management                 | Approved (2026-10-28)    | [modules/overtime.md](modules/overtime.md) |
 | 8   | Reports & Analytics                 | Approved (2026-11-10)    | [modules/reports.md](modules/reports.md) |
-| 9   | Hardening                           | Built, awaiting approval | [modules/hardening.md](modules/hardening.md) |
+| 9   | Hardening                           | Approved (2026-11-11)    | [modules/hardening.md](modules/hardening.md) |
 
 API reference: [api/openapi.yaml](api/openapi.yaml)

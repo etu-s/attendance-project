@@ -205,4 +205,4 @@ npm run build
 | 6   | Leave Management                    | Approved (2026-10-27) |
 | 7   | Overtime Management                 | Approved (2026-10-28) |
 | 8   | Reports & Analytics                 | Approved (2026-11-10) |
-| 9   | Hardening                           | Built, awaiting approval (2026-11-11) |
+| 9   | Hardening                           | Approved (2026-11-11) |
