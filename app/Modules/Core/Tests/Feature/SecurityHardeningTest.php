@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Modules\Core\Enums\RoleName;
 use App\Modules\Core\Logging\MaskSensitiveData;
 use App\Modules\Core\Logging\MaskSensitiveDataTap;
+use Illuminate\Foundation\Console\ServeCommand;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Routing\Route as RoutingRoute;
 use Illuminate\Support\Facades\Log;
@@ -160,4 +161,8 @@ describe('log masking', function (): void {
         expect($handler->getRecords()[0]->message)->toBe('Mail to [email] bounced')
             ->and($handler->getRecords()[0]->context['token'])->toBe('[masked]');
     });
+});
+
+it('lets artisan serve pass the temp folder variables to PHP (Windows needs them for SQLite and uploads)', function (): void {
+    expect(ServeCommand::$passthroughVariables)->toContain('TMP', 'TEMP', 'USERPROFILE');
 });

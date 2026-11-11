@@ -27,6 +27,7 @@ use App\Modules\Core\Support\TenantClock;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\Relation;
+use Illuminate\Foundation\Console\ServeCommand;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Event;
@@ -73,6 +74,15 @@ final class CoreServiceProvider extends ModuleServiceProvider
 
         if ($this->app->runningInConsole()) {
             $this->commands([BackupDatabasesCommand::class]);
+
+            // `artisan serve` starts PHP with a short allow-list of environment
+            // variables. Without TMP/TEMP/USERPROFILE, PHP on Windows falls back
+            // to C:\Windows for temporary files, which is not writable: SQLite
+            // then fails with "unable to open database file" (e.g. creating a
+            // tenant) and uploads fail. Pass them through.
+            ServeCommand::$passthroughVariables = array_values(array_unique([
+                ...ServeCommand::$passthroughVariables, 'TMP', 'TEMP', 'TMPDIR', 'USERPROFILE',
+            ]));
         }
     }
 
