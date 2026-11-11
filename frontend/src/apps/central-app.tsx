@@ -1,4 +1,4 @@
-import { Building2, Layers, Loader2 } from 'lucide-react'
+import { Building2, Layers, Loader2, ScrollText } from 'lucide-react'
 import { createBrowserRouter, Link, Navigate, Outlet, RouterProvider } from 'react-router'
 import { AppShell } from '@/components/app-shell'
 import { LoginForm } from '@/components/login-form'
@@ -7,6 +7,7 @@ import { centralApi } from '@/lib/api/client'
 import { FullPageMessage } from '@/components/states'
 import { Button } from '@/components/ui/button'
 import { useAdmin, useAdminLogin, useAdminLogout, useAdminSessionQuery } from '@/features/central-auth/api'
+import { CentralAuditLogPage } from '@/features/audit-logs/audit-log-page'
 import { PlansPage } from '@/features/plans/plans-page'
 import { TenantsPage } from '@/features/tenants/tenants-page'
 import { errorMessage } from '@/lib/forms'
@@ -74,6 +75,7 @@ function CentralLayout() {
       nav={[
         { to: '/', label: 'Tenants', icon: Building2, end: true },
         { to: '/plans', label: 'Plans', icon: Layers },
+        { to: '/audit-log', label: 'Audit log', icon: ScrollText },
       ]}
       user={admin}
       onLogout={() => logout.mutate()}
@@ -111,6 +113,7 @@ const router = createBrowserRouter([
             children: [
               { index: true, element: <TenantsPage /> },
               { path: '/plans', element: <PlansPage /> },
+              { path: '/audit-log', element: <CentralAuditLogPage /> },
               {
                 path: '*',
                 element: <FullPageMessage title="Page not found" description="This page does not exist." />,

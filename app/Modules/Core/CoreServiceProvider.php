@@ -28,6 +28,7 @@ use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\RateLimiter;
 
@@ -62,6 +63,10 @@ final class CoreServiceProvider extends ModuleServiceProvider
         $this->registerSettings();
         $this->registerPermissions();
         $this->registerRateLimiters();
+
+        // Private-channel authorisation for the SPA (Reverb), on workspace hosts
+        // only and with the workspace session: POST /api/v1/broadcasting/auth.
+        Broadcast::routes(['prefix' => 'api/v1', 'middleware' => ['api', 'tenant', 'auth:sanctum', 'throttle:api']]);
 
         Event::listen(TenantDefaultsSyncRequested::class, SeedDefaultSettings::class);
         Event::listen(TenantDatabaseProvisioned::class, ApplyProvisioningSettings::class);

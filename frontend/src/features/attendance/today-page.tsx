@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { DataTable } from '@/components/data-table'
 import { PageHeader } from '@/components/states'
 import { Card, CardContent } from '@/components/ui/card'
@@ -8,6 +9,8 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { useSession } from '@/features/tenant-auth/hooks'
 import { useListParams } from '@/hooks/use-list-params'
 import { todayIn } from '@/lib/format'
+import { resolveAppContext } from '@/lib/host'
+import { usePrivateChannel } from '@/lib/realtime'
 import { cn } from '@/lib/utils'
 import { useAttendance, useAttendanceSummary, type AttendanceDay, type AttendanceStatus } from './api'
 import { useAttendanceColumns } from './attendance-columns'
@@ -27,8 +30,8 @@ const tiles: { label: string; statuses: AttendanceStatus[]; tone: string }[] = [
 ]
 
 /**
- * Who is in, late or absent on one day (today by default). Refreshes every
- * 30 seconds while open.
+ * Who is in, late or absent on one day (today by default). Live over Reverb
+ * when configured, otherwise refreshed every 30 seconds while open.
  */
 export function TodayPage() {
   const { workspace } = useSession()
@@ -36,8 +39,18 @@ export function TodayPage() {
   const list = useListParams({ defaultSort: 'first_in_at', filters: ['date', 'status', 'department_id'], defaultPerPage: 25 })
   const date = list.filter('date') || today
   const live = date === today
-  const summary = useAttendanceSummary({ date, department_id: list.filter('department_id') || undefined }, live)
-  const attendance = useAttendance({ ...list.params, date }, { live })
+  // Pushed over Reverb when configured; polling stays as the fallback while the socket is down.
+  const queryClient = useQueryClient()
+  const refresh = useCallback(() => void queryClient.invalidateQueries({ queryKey: ['tenant', 'attendance'] }), [queryClient])
+  const context = resolveAppContext()
+  const pushed = usePrivateChannel(
+    live && context.kind === 'tenant' ? `workspace.${context.subdomain}.attendance` : null,
+    'today.changed',
+    refresh,
+  )
+  const poll = live && !pushed
+  const summary = useAttendanceSummary({ date, department_id: list.filter('department_id') || undefined }, poll)
+  const attendance = useAttendance({ ...list.params, date }, { live: poll })
   const [open, setOpen] = useState<AttendanceDay | null>(null)
   const columns = useAttendanceColumns(setOpen, { showDate: false })
   const activeStatus = list.filter('status')
@@ -48,7 +61,7 @@ export function TodayPage() {
         title={live ? 'Today' : 'Attendance on a day'}
         description={
           live
-            ? 'Live attendance, refreshed every 30 seconds. A day becomes absent once its punch window closes.'
+            ? `Live attendance, ${pushed ? 'updated as punches arrive' : 'refreshed every 30 seconds'}. A day becomes absent once its punch window closes.`
             : 'Attendance for the selected day.'
         }
         actions={

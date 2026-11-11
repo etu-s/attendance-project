@@ -10,8 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useDisplayPreferences } from '@/features/tenant-auth/hooks'
 import { useListParams } from '@/hooks/use-list-params'
-import { formatDateTime } from '@/lib/format'
-import { auditActions, useAuditLogs, type AuditAction, type AuditLog } from './api'
+import { defaultPreferences, formatDateTime, type DisplayPreferences } from '@/lib/format'
+import { auditActions, useAuditLogs, type AuditAction, type AuditLog, type AuditScope } from './api'
 
 const ALL = 'all'
 
@@ -54,14 +54,33 @@ function changedFields(log: AuditLog): string[] {
   return [...new Set([...Object.keys(log.before ?? {}), ...Object.keys(log.after ?? {})])]
 }
 
+/** The workspace audit log (times in the workspace's display preferences). */
 export function AuditLogPage() {
   const prefs = useDisplayPreferences()
+
+  return (
+    <AuditLogView scope="tenant" prefs={prefs} description="Who changed what, and when. Entries cannot be edited or removed." />
+  )
+}
+
+/** The central audit log of the super admin console (plans, tenants, admins; UTC). */
+export function CentralAuditLogPage() {
+  return (
+    <AuditLogView
+      scope="central"
+      prefs={{ ...defaultPreferences, timezone: 'UTC' }}
+      description="Changes to plans, tenants and super admins. Times and date filters are UTC."
+    />
+  )
+}
+
+function AuditLogView({ scope, prefs, description }: { scope: AuditScope; prefs: DisplayPreferences; description: string }) {
   const list = useListParams({
     defaultSort: '-created_at',
     filters: ['action', 'subject_type', 'from', 'to'],
     defaultPerPage: 25,
   })
-  const logs = useAuditLogs(list.params)
+  const logs = useAuditLogs(list.params, scope)
   const [selected, setSelected] = useState<AuditLog | null>(null)
 
   const columns: Column<AuditLog>[] = [
@@ -116,7 +135,7 @@ export function AuditLogPage() {
 
   return (
     <>
-      <PageHeader title="Audit log" description="Who changed what, and when. Entries cannot be edited or removed." />
+      <PageHeader title="Audit log" description={description} />
 
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
         <div className="grid gap-1.5">

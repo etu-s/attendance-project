@@ -196,7 +196,7 @@ function useInvalidateAttendance() {
 
 // ---------------------------------------------------------------- attendance
 
-/** The Today board refreshes every 30 seconds (live push comes with Reverb, later). */
+/** Polling interval of the Today board when there is no live (Reverb) connection. */
 export const LIVE_REFRESH_MS = 30_000
 
 export function useAttendance(params: ListParams, options: { live?: boolean } = {}) {

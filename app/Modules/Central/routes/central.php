@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Modules\Central\Http\Controllers\AuthController;
+use App\Modules\Central\Http\Controllers\CentralAuditLogController;
 use App\Modules\Central\Http\Controllers\PlanController;
 use App\Modules\Central\Http\Controllers\TenantController;
 use Illuminate\Support\Facades\Route;
@@ -19,6 +20,8 @@ Route::middleware('throttle:password')->group(function (): void {
 Route::middleware(['auth:central', 'throttle:api'])->group(function (): void {
     Route::post('auth/logout', [AuthController::class, 'logout'])->name('auth.logout');
     Route::get('auth/me', [AuthController::class, 'me'])->name('auth.me');
+
+    Route::get('audit-logs', [CentralAuditLogController::class, 'index'])->name('audit-logs.index');
 
     Route::apiResource('plans', PlanController::class);
 

@@ -14,5 +14,8 @@ Schedule::command('attendance:close-days')->everyFifteenMinutes()->withoutOverla
 // Leave grants, monthly accruals, carry-forward and expiry (Leave module); idempotent.
 Schedule::command('leave:accrue')->hourly()->withoutOverlapping();
 
+// VACUUM INTO backups of central + every workspace, then old folders pruned (Core).
+Schedule::command('db:backup --prune')->dailyAt('02:30')->withoutOverlapping();
+
 // Deletes report export files past their expiry (Reports module).
 Schedule::command('reports:prune-exports')->daily()->withoutOverlapping();

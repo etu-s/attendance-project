@@ -50,6 +50,37 @@ final class DatabaseBackupService
         return $target;
     }
 
+    /**
+     * Deletes backup folders (named Ymd_His_v by newBackupDirectory) older
+     * than $days. Anything else in the backup path is left alone.
+     *
+     * @return list<string> the deleted folder names
+     */
+    public function pruneOlderThan(int $days): array
+    {
+        $root = rtrim((string) config('ams.backups.path'), '/\\');
+        if ($days < 1 || ! is_dir($root)) {
+            return [];
+        }
+
+        $cutoff = now()->utc()->subDays($days);
+        $deleted = [];
+
+        foreach (File::directories($root) as $directory) {
+            $name = basename($directory);
+            $taken = \DateTimeImmutable::createFromFormat('Ymd_His_v', $name, new \DateTimeZone('UTC'));
+
+            if ($taken !== false && $taken < $cutoff) {
+                File::deleteDirectory($directory);
+                $deleted[] = $name;
+            }
+        }
+
+        sort($deleted);
+
+        return $deleted;
+    }
+
     private function vacuumInto(ConnectionInterface $connection, string $target): void
     {
         if (file_exists($target)) {

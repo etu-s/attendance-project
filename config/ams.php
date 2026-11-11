@@ -26,6 +26,8 @@ return [
         // Absolute path; resolved before entering tenant context because the
         // filesystem bootstrapper suffixes storage_path() per tenant.
         'path' => env('BACKUP_PATH', storage_path('backups')),
+        // `db:backup --prune` (scheduled daily) deletes backup folders older than this.
+        'keep_days' => (int) env('BACKUP_KEEP_DAYS', 14),
     ],
 
     // Local development seed accounts (php artisan migrate --seed). Never used in production.

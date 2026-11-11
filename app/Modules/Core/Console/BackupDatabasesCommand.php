@@ -13,7 +13,8 @@ final class BackupDatabasesCommand extends Command
 {
     protected $signature = 'db:backup
         {--tenant=* : Only back up these tenant ids (central is skipped)}
-        {--skip-central : Do not back up the central database}';
+        {--skip-central : Do not back up the central database}
+        {--prune : Afterwards delete backup folders older than ams.backups.keep_days}';
 
     protected $description = 'Back up the central and tenant SQLite databases with VACUUM INTO';
 
@@ -47,6 +48,12 @@ final class BackupDatabasesCommand extends Command
         }
 
         $this->components->info("Backups written to {$directory}");
+
+        // Only after a complete run: a failing backup never costs the older ones.
+        if ($this->option('prune') && $failures === 0) {
+            $deleted = $backups->pruneOlderThan((int) config('ams.backups.keep_days'));
+            $this->components->info('Pruned '.count($deleted).' backup folder(s) older than '.config('ams.backups.keep_days').' days.');
+        }
 
         return $failures === 0 ? self::SUCCESS : self::FAILURE;
     }

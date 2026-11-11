@@ -17,9 +17,10 @@ final class AuditLogQuery
     /**
      * @param  array<string, mixed>  $filters  validated IndexAuditLogsRequest input
      * @param  array{0: string, 1: 'asc'|'desc'}  $sort
+     * @param  string|null  $timezone  of the from/to days; default the tenant's (central passes UTC)
      * @return LengthAwarePaginator<int, AuditLog>
      */
-    public function paginate(array $filters, array $sort, int $perPage): LengthAwarePaginator
+    public function paginate(array $filters, array $sort, int $perPage, ?string $timezone = null): LengthAwarePaginator
     {
         $query = AuditLog::query();
 
@@ -38,7 +39,7 @@ final class AuditLogQuery
         }
 
         // `from`/`to` are calendar days as the tenant sees them; created_at is UTC.
-        $timezone = (string) $this->settings->get('general.timezone');
+        $timezone ??= (string) $this->settings->get('general.timezone');
 
         if (isset($filters['from'])) {
             $from = CarbonImmutable::createFromFormat('Y-m-d', (string) $filters['from'], $timezone)->startOfDay()->utc();
