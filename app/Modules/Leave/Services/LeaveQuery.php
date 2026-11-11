@@ -37,7 +37,7 @@ final class LeaveQuery
      */
     public function paginate(array $filters, ?string $search, array $sort, int $perPage, User $viewer): LengthAwarePaginator
     {
-        $query = LeaveRequest::query()->with(['employee', 'type', 'requester', 'decider']);
+        $query = LeaveRequest::query()->with(['employee', 'type', 'requester', 'decider', 'attachments.uploader']);
 
         foreach (['status', 'leave_type_id', 'employee_id'] as $column) {
             if (isset($filters[$column])) {

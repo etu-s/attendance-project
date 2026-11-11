@@ -38,6 +38,7 @@ final class LeaveRequestService
         private readonly LeaveLedger $ledger,
         private readonly LeaveRules $rules,
         private readonly PeriodLock $locks,
+        private readonly LeaveAttachmentService $attachments,
     ) {}
 
     /**
@@ -204,6 +205,9 @@ final class LeaveRequestService
 
         if ($wasApproved) {
             $this->changed($request);
+        } else {
+            // Approved: the files stay as evidence of the leave that was granted.
+            $this->attachments->removeAll($request);
         }
 
         return $request->load(['employee', 'type', 'requester', 'decider']);

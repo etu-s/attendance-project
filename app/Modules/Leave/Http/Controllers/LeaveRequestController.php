@@ -83,7 +83,7 @@ final class LeaveRequestController extends Controller
         abort_unless($user !== null && ($user->can('leave.request') || $user->can('leave.view')), 403);
         $this->authorize('view', $leaveRequest->employee);
 
-        return new LeaveRequestResource($leaveRequest->load(['employee', 'type', 'requester', 'decider', 'days']));
+        return new LeaveRequestResource($leaveRequest->load(['employee', 'type', 'requester', 'decider', 'days', 'attachments.uploader']));
     }
 
     public function approve(DecideLeaveRequest $request, LeaveRequest $leaveRequest): LeaveRequestResource

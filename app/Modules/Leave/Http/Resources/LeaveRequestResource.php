@@ -6,6 +6,7 @@ namespace App\Modules\Leave\Http\Resources;
 
 use App\Modules\Identity\Models\User;
 use App\Modules\Leave\Models\LeaveRequest;
+use App\Modules\Leave\Models\LeaveRequestAttachment;
 use App\Modules\Leave\Models\LeaveRequestDay;
 use App\Modules\Leave\Services\LeaveRules;
 use Illuminate\Http\Request;
@@ -55,6 +56,11 @@ class LeaveRequestResource extends JsonResource
             ])->all()),
             'can_decide' => $viewer !== null && $rules->canDecide($viewer, $this->resource),
             'can_cancel' => $viewer !== null && $rules->canCancel($viewer, $this->resource),
+            // Files only for people who may see them (LeaveRules::canViewAttachments).
+            'attachments' => $this->whenLoaded('attachments', fn () => $viewer !== null && $rules->canViewAttachments($viewer, $this->resource)
+                ? LeaveAttachmentResource::collection($this->attachments->each(fn (LeaveRequestAttachment $a) => $a->setRelation('request', $this->resource)))
+                : []),
+            'can_attach' => $viewer !== null && $rules->canAttach($viewer, $this->resource),
         ];
     }
 }

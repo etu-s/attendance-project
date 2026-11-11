@@ -14,8 +14,10 @@ use App\Modules\Core\Support\ModuleServiceProvider;
 use App\Modules\Leave\Console\AccrueLeaveCommand;
 use App\Modules\Leave\Listeners\RecountOnScheduleChange;
 use App\Modules\Leave\Models\LeaveRequest;
+use App\Modules\Leave\Models\LeaveRequestAttachment;
 use App\Modules\Leave\Models\LeaveType;
 use App\Modules\Leave\Services\LeaveAccrualService;
+use App\Modules\Leave\Services\LeaveAttachmentService;
 use App\Modules\Leave\Services\LeaveBalanceService;
 use App\Modules\Leave\Services\LeaveCalendarService;
 use App\Modules\Leave\Services\LeaveDayCounter;
@@ -48,6 +50,7 @@ final class LeaveServiceProvider extends ModuleServiceProvider
         // LeaveRules memoizes visibility per user: scoped so it resets per request / job.
         $this->app->scoped(LeaveRules::class);
         $this->app->scoped(LeaveRequestService::class);
+        $this->app->scoped(LeaveAttachmentService::class);
 
         $this->app->singleton(LeaveCalendar::class, LeaveCalendarService::class);
     }
@@ -59,6 +62,7 @@ final class LeaveServiceProvider extends ModuleServiceProvider
         Relation::enforceMorphMap([
             'leave_type' => LeaveType::class,
             'leave_request' => LeaveRequest::class,
+            'leave_request_attachment' => LeaveRequestAttachment::class,
         ]);
 
         Event::listen(ScheduleChanged::class, RecountOnScheduleChange::class);

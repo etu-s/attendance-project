@@ -9,8 +9,10 @@ import { useDisplayPreferences } from '@/features/tenant-auth/hooks'
 import { errorMessage } from '@/lib/forms'
 import { useLeaveAction, type LeaveRequest } from './api'
 import { formatDays, leaveRange } from './format'
+import { LeaveAttachmentsDialog } from './leave-attachments-dialog'
 
-export type LeaveAction = { request: LeaveRequest; action: 'approve' | 'reject' | 'cancel' }
+/** 'attachments' opens the files of the request (LeaveAttachmentsDialog). */
+export type LeaveAction = { request: LeaveRequest; action: 'approve' | 'reject' | 'cancel' | 'attachments' }
 
 const copy = {
   approve: { title: 'Approve leave', button: 'Approve', done: 'Leave approved.' },
@@ -26,6 +28,10 @@ export function LeaveActionDialog({ target, onClose }: { target: LeaveAction | n
 
   if (!target) {
     return null
+  }
+
+  if (target.action === 'attachments') {
+    return <LeaveAttachmentsDialog requestId={target.request.id} onClose={onClose} />
   }
 
   const { request, action } = target

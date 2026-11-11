@@ -54,6 +54,20 @@ export interface LeaveRequest {
   counted_days?: { date: string; portion: DayPortion }[]
   can_decide: boolean
   can_cancel: boolean
+  /** Present on lists and detail; empty when the viewer may not see the files. */
+  attachments?: LeaveAttachment[]
+  can_attach: boolean
+}
+
+/** Mirrors LeaveAttachmentResource.php. */
+export interface LeaveAttachment {
+  id: number
+  name: string
+  mime_type: string
+  size_bytes: number
+  uploaded_by: { id: number; name: string } | null
+  created_at: string
+  can_remove: boolean
 }
 
 export interface LeaveBalance {
@@ -197,6 +211,51 @@ export function useLeaveAction() {
         .then((r) => r.data),
     onSuccess: invalidate,
   })
+}
+
+// ---------------------------------------------------------------- attachments
+
+/** Mirrors LeaveRules / LeaveAttachmentService limits. */
+export const ATTACHMENT_LIMITS = { files: 3, bytes: 5 * 1024 * 1024, accept: '.pdf,.jpg,.jpeg,.png' } as const
+
+export function useLeaveRequest(id: number | null) {
+  return useQuery<LeaveRequest>({
+    queryKey: [...keys.requests, 'detail', id],
+    queryFn: ({ signal }) =>
+      tenantApi.get<Resource<LeaveRequest>>(`/leave-requests/${String(id)}`, undefined, signal).then((r) => r.data),
+    enabled: id !== null,
+  })
+}
+
+export function useUploadLeaveAttachment(requestId: number) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (file: File) => {
+      const body = new FormData()
+      body.append('file', file)
+
+      return tenantApi
+        .post<Resource<LeaveAttachment>>(`/leave-requests/${String(requestId)}/attachments`, body)
+        .then((r) => r.data)
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: keys.requests }),
+  })
+}
+
+export function useDeleteLeaveAttachment(requestId: number) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (attachmentId: number) =>
+      tenantApi.delete<undefined>(`/leave-requests/${String(requestId)}/attachments/${String(attachmentId)}`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: keys.requests }),
+  })
+}
+
+/** Same-origin download; the session cookie authorises it. */
+export function leaveAttachmentUrl(requestId: number, attachmentId: number): string {
+  return `/api/v1/leave-requests/${String(requestId)}/attachments/${String(attachmentId)}`
 }
 
 export function useLeaveCalendar(params: { from: string; to: string; department_id?: string }) {

@@ -8,6 +8,7 @@ use App\Modules\Core\Support\TenantClock;
 use App\Modules\Identity\Models\User;
 use App\Modules\Leave\Enums\LeaveRequestStatus;
 use App\Modules\Leave\Models\LeaveRequest;
+use App\Modules\Leave\Models\LeaveRequestAttachment;
 use App\Modules\Organization\Models\Employee;
 use App\Modules\Organization\Services\EmployeeVisibility;
 
@@ -61,6 +62,36 @@ final class LeaveRules
         return $request->start_date->greaterThan($this->clock->today())
             ? $involved
             : $actor->can('leave.manage');
+    }
+
+    /**
+     * Attachments (medical certificates are sensitive): the requester or the
+     * employee, and people who may view or decide that employee's leave.
+     */
+    public function canViewAttachments(User $actor, LeaveRequest $request): bool
+    {
+        return $this->isOwn($actor, $request)
+            || (($actor->can('leave.view') || $actor->can('leave.approve')) && $this->canSee($actor, $request->employee));
+    }
+
+    /**
+     * Adding files: the requester or the employee, or HR (leave.manage), while
+     * the request is pending or approved (a certificate may come later).
+     */
+    public function canAttach(User $actor, LeaveRequest $request): bool
+    {
+        return $request->status->isActive()
+            && ($this->isOwn($actor, $request) || ($actor->can('leave.manage') && $this->canSee($actor, $request->employee)));
+    }
+
+    /**
+     * Removing a file: its uploader or HR, while the request is pending
+     * (the evidence of an approved request stays).
+     */
+    public function canRemoveAttachment(User $actor, LeaveRequest $request, LeaveRequestAttachment $attachment): bool
+    {
+        return $request->status === LeaveRequestStatus::Pending
+            && ($attachment->uploaded_by === $actor->id || ($actor->can('leave.manage') && $this->canSee($actor, $request->employee)));
     }
 
     public function isOwn(User $actor, LeaveRequest $request): bool

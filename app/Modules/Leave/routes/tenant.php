@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Modules\Leave\Http\Controllers\LeaveAttachmentController;
 use App\Modules\Leave\Http\Controllers\LeaveBalanceController;
 use App\Modules\Leave\Http\Controllers\LeaveCalendarController;
 use App\Modules\Leave\Http\Controllers\LeaveRequestController;
@@ -21,6 +22,13 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function (): void {
     Route::post('leave-requests/{leaveRequest}/approve', [LeaveRequestController::class, 'approve'])->name('leave-requests.approve');
     Route::post('leave-requests/{leaveRequest}/reject', [LeaveRequestController::class, 'reject'])->name('leave-requests.reject');
     Route::post('leave-requests/{leaveRequest}/cancel', [LeaveRequestController::class, 'cancel'])->name('leave-requests.cancel');
+
+    Route::post('leave-requests/{leaveRequest}/attachments', [LeaveAttachmentController::class, 'store'])
+        ->middleware('throttle:heavy')->name('leave-attachments.store');
+    Route::get('leave-requests/{leaveRequest}/attachments/{attachment}', [LeaveAttachmentController::class, 'download'])
+        ->whereNumber(['leaveRequest', 'attachment'])->name('leave-attachments.download');
+    Route::delete('leave-requests/{leaveRequest}/attachments/{attachment}', [LeaveAttachmentController::class, 'destroy'])
+        ->whereNumber(['leaveRequest', 'attachment'])->name('leave-attachments.destroy');
 
     Route::get('leave-calendar', LeaveCalendarController::class)->name('leave-calendar');
 

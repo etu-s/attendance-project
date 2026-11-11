@@ -122,9 +122,10 @@ describe('leave', function (): void {
     it('totals approved leave per employee and leave type, in half days', function (): void {
         $this->approveLeave('2026-03-09', '2026-03-10');
         $this->approveLeave('2026-03-12', '2026-03-12', ['leave_type_id' => $this->unpaid->id, 'half_end' => true]);
-        $this->actingAsTenantUser($this->worker)->postJson($this->tenantUrl($this->tenant, 'me/leave-requests'), [
-            'leave_type_id' => $this->annual->id, 'start_date' => '2026-03-16', 'end_date' => '2026-03-16',
-        ]);
+        // A pending request: not counted.
+        $this->actingAsTenantUser($this->worker)
+            ->postJson($this->tenantUrl($this->tenant, 'leave-requests'), $this->leaveBody('2026-03-16', '2026-03-16'))
+            ->assertCreated()->assertJsonPath('data.status', 'pending');
 
         $this->actingAsTenantUser($this->hr)
             ->getJson($this->tenantUrl($this->tenant, "reports/leave?{$this->march}"))

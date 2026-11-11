@@ -1,4 +1,4 @@
-import { Check, Undo2, X } from 'lucide-react'
+import { Check, Paperclip, Undo2, X } from 'lucide-react'
 import type { Column } from '@/components/data-table'
 import { StatusBadge } from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
@@ -89,9 +89,21 @@ export function useLeaveColumns(
     {
       key: 'actions',
       header: '',
-      className: 'w-32 text-right',
+      className: 'w-40 text-right',
       cell: (r) => (
         <div className="flex justify-end gap-1">
+          {((r.attachments?.length ?? 0) > 0 || r.can_attach) && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 gap-1 px-2"
+              aria-label={`Attachments of ${r.employee.full_name}'s leave (${String(r.attachments?.length ?? 0)})`}
+              onClick={() => onAction({ request: r, action: 'attachments' })}
+            >
+              <Paperclip />
+              {(r.attachments?.length ?? 0) > 0 && <span className="tabular-nums">{r.attachments?.length}</span>}
+            </Button>
+          )}
           {r.can_decide && (
             <>
               <Button

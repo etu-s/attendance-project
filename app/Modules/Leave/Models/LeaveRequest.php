@@ -43,6 +43,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property-read Employee $employee
  * @property-read LeaveType $type
  * @property-read Collection<int, LeaveRequestDay> $days
+ * @property-read Collection<int, LeaveRequestAttachment> $attachments
  * @property-read User|null $requester
  * @property-read User|null $decider
  */
@@ -103,6 +104,14 @@ class LeaveRequest extends Model
     public function days(): HasMany
     {
         return $this->hasMany(LeaveRequestDay::class)->orderBy('date');
+    }
+
+    /**
+     * @return HasMany<LeaveRequestAttachment, $this>
+     */
+    public function attachments(): HasMany
+    {
+        return $this->hasMany(LeaveRequestAttachment::class)->orderBy('id');
     }
 
     /**
