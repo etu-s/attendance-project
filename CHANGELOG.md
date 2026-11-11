@@ -4,6 +4,26 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ## [Unreleased]
 
+### Added — Module 9: Hardening
+
+- Security: headers on every API response (strict CSP, frame deny, nosniff, HSTS over HTTPS when configured);
+  personal data and secrets masked in every log channel; `heavy` and `password` rate limiters; a route audit test
+  (every API route authenticated, rate limited and in its host group); all `composer audit` advisories fixed with
+  patch updates; production checklist in `.env.example`.
+- Performance: one `AttendanceDaysChanged` per recalculation run (the reports rollup refreshes each date once);
+  department, group and location schedule changes recalculate only the people they reach; index-usage tests; report
+  pages and the WebSocket client load on demand (tenant bundle 687 kB → ~300 kB).
+- Payroll module: lock payroll periods of finished days (HR), unlock with a reason (Tenant Admin). Locked days are
+  frozen: no recalculation, and corrections, leave, overtime decisions and schedule changes touching them answer
+  `409 period_locked`. Core `PeriodLock` contract and `PayrollPeriodUnlocked` event. Payroll periods page; reports
+  note locked periods.
+- Leave attachments: PDF/JPG/PNG up to 5 MB, 3 per request, visible to the employee, approvers and HR.
+- Password reset for workspace users and super admins; email invitations to set a first password (7 days).
+- Live Today board over Reverb (private per-workspace channel, polling fallback); central audit log API and page;
+  `db:backup --prune` scheduled daily with retention; deployment and restore guide (`docs/deployment.md`).
+- New dependencies: `laravel-echo` and `pusher-js` (Reverb client, loaded only when configured).
+- 45 new Pest tests (476 total); OpenAPI spec v0.9.0.
+
 ### Added — Module 8: Reports & Analytics
 
 - Reports module (`app/Modules/Reports`): `attendance_daily_stats`, a rollup of calculated attendance per work date,

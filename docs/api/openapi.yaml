@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: AMS API
-  version: 0.8.0
+  version: 0.9.0
   description: |
     Multi-tenant Attendance Management System. JSON only, versioned under `/api/v1`.
 
@@ -47,6 +47,7 @@ tags:
   - name: Leave
   - name: Overtime
   - name: Reports
+  - name: Payroll
 
 paths:
   /sanctum/csrf-cookie:
@@ -1557,6 +1558,162 @@ paths:
         '409': { description: 'Not ready yet (`rule: export_not_ready`)', content: { application/json: { schema: { $ref: '#/components/schemas/BusinessRuleError' } } } }
         '410': { description: 'Expired, file deleted (`rule: export_expired`)', content: { application/json: { schema: { $ref: '#/components/schemas/BusinessRuleError' } } } }
 
+  /api/v1/auth/forgot-password:
+    post:
+      tags: [Tenant auth]
+      summary: Email a password reset link (public; same answer whether or not the email has an account)
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [email], properties: { email: { type: string, format: email } } } } } }
+      responses:
+        '202': { description: Accepted, content: { application/json: { schema: { $ref: '#/components/schemas/Message' } } } }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+  /api/v1/auth/reset-password:
+    post:
+      tags: [Tenant auth]
+      summary: Set a new password from a reset link (60 minutes, single use)
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/SetPasswordInput' } } } }
+      responses:
+        '204': { description: Password changed }
+        '422': { description: 'Invalid password, or `errors.token` when the link is invalid or expired', content: { application/json: { schema: { type: object } } } }
+  /api/v1/auth/accept-invitation:
+    post:
+      tags: [Tenant auth]
+      summary: Set the first password from an invitation link (7 days, single use)
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/SetPasswordInput' } } } }
+      responses:
+        '204': { description: Password set }
+        '422': { description: 'Invalid password, or `errors.token` when the link is invalid or expired', content: { application/json: { schema: { type: object } } } }
+  /api/v1/users/{id}/invitation:
+    post:
+      tags: [Users]
+      summary: (Re)send an invitation email to set a password (users.update; Tenant Admin accounts only by a Tenant Admin)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '202': { description: Sent, content: { application/json: { schema: { $ref: '#/components/schemas/Message' } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { description: 'Account deactivated (`rule: user_inactive`)', content: { application/json: { schema: { $ref: '#/components/schemas/BusinessRuleError' } } } }
+  /api/v1/central/auth/forgot-password:
+    post:
+      tags: [Central auth]
+      summary: Email a password reset link to a super admin (public; same answer for any email)
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [email], properties: { email: { type: string, format: email } } } } } }
+      responses:
+        '202': { description: Accepted, content: { application/json: { schema: { $ref: '#/components/schemas/Message' } } } }
+  /api/v1/central/auth/reset-password:
+    post:
+      tags: [Central auth]
+      summary: Set a new super admin password from a reset link
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/SetPasswordInput' } } } }
+      responses:
+        '204': { description: Password changed }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v1/central/audit-logs:
+    get:
+      tags: [Audit log]
+      summary: The central audit log (plans, tenants, domains, super admins); any super admin. from/to are UTC days
+      parameters:
+        - { name: action, in: query, schema: { type: string, enum: [created, updated, deleted, restored, role_changed] } }
+        - { name: subject_type, in: query, schema: { type: string } }
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/PerPage' }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: object, properties: { data: { type: array, items: { type: object } }, meta: { $ref: '#/components/schemas/PaginationMeta' } } } } } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+  /api/v1/broadcasting/auth:
+    post:
+      tags: [Attendance]
+      summary: Authorise a private Reverb channel (live Today board `private-workspace.{subdomain}.attendance`; attendance.view)
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [socket_id, channel_name], properties: { socket_id: { type: string }, channel_name: { type: string } } } } } }
+      responses:
+        '200': { description: Signed channel auth, content: { application/json: { schema: { type: object, properties: { auth: { type: string } } } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/payroll-periods:
+    get:
+      tags: [Payroll]
+      summary: Payroll periods, newest first (payroll-periods.view)
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [locked, unlocked] } }
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/PerPage' }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: object, properties: { data: { type: array, items: { $ref: '#/components/schemas/PayrollPeriod' } }, meta: { $ref: '#/components/schemas/PaginationMeta' } } } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [Payroll]
+      summary: Lock a period of finished days (payroll-periods.manage); at most 366 days, no overlap with another locked period
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, start_date, end_date]
+              properties:
+                name: { type: string, maxLength: 80 }
+                start_date: { type: string, format: date }
+                end_date: { type: string, format: date, description: Before today }
+      responses:
+        '201': { description: Locked, content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/PayrollPeriod' } } } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { description: '`rule: period_overlap`', content: { application/json: { schema: { $ref: '#/components/schemas/BusinessRuleError' } } } }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v1/payroll-periods/{id}/lock:
+    post:
+      tags: [Payroll]
+      summary: Lock an unlocked period again (payroll-periods.manage)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/PayrollPeriod' } } } } } }
+        '409': { description: '`rule: period_already_locked` or `period_overlap`', content: { application/json: { schema: { $ref: '#/components/schemas/BusinessRuleError' } } } }
+  /api/v1/payroll-periods/{id}/unlock:
+    post:
+      tags: [Payroll]
+      summary: Unlock a period (Tenant Admin only, payroll-periods.unlock); its days are recalculated
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [reason], properties: { reason: { type: string, minLength: 3, maxLength: 255 } } } } } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/PayrollPeriod' } } } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { description: '`rule: period_not_locked`', content: { application/json: { schema: { $ref: '#/components/schemas/BusinessRuleError' } } } }
+  /api/v1/leave-requests/{id}/attachments:
+    post:
+      tags: [Leave]
+      summary: Attach a file (PDF, JPG or PNG, at most 5 MB, 3 per request) to a pending or approved request
+      description: The requester or the employee, or HR. Anyone who may not see the request's files gets 404.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody: { required: true, content: { multipart/form-data: { schema: { type: object, required: [file], properties: { file: { type: string, format: binary } } } } } }
+      responses:
+        '201': { description: Attached, content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/LeaveAttachment' } } } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: '`rule: leave_attachment_limit` or `leave_attachment_forbidden` (closed request)', content: { application/json: { schema: { $ref: '#/components/schemas/BusinessRuleError' } } } }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v1/leave-requests/{id}/attachments/{attachment}:
+    get:
+      tags: [Leave]
+      summary: Download an attachment (the requester or employee, their approvers, HR)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+        - { name: attachment, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: The file, content: { application/pdf: { schema: { type: string, format: binary } }, image/jpeg: { schema: { type: string, format: binary } }, image/png: { schema: { type: string, format: binary } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [Leave]
+      summary: Remove an attachment (its uploader or HR, while the request is pending)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+        - { name: attachment, in: path, required: true, schema: { type: integer } }
+      responses:
+        '204': { description: Removed }
+        '403': { description: '`rule: leave_attachment_forbidden`', content: { application/json: { schema: { $ref: '#/components/schemas/BusinessRuleError' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+
 components:
   securitySchemes:
     PunchSourceKey:
@@ -2386,3 +2543,34 @@ components:
         created_at: { type: string, format: date-time }
         completed_at: { type: [string, 'null'], format: date-time }
         expires_at: { type: [string, 'null'], format: date-time }
+    SetPasswordInput:
+      type: object
+      required: [token, email, password, password_confirmation]
+      properties:
+        token: { type: string, description: From the emailed link }
+        email: { type: string, format: email, description: From the emailed link }
+        password: { type: string, minLength: 8, description: At least one letter and one number }
+        password_confirmation: { type: string }
+    PayrollPeriod:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        start_date: { type: string, format: date }
+        end_date: { type: string, format: date }
+        status: { type: string, enum: [locked, unlocked] }
+        locked_by: { type: [object, 'null'], properties: { id: { type: integer }, name: { type: string } } }
+        locked_at: { type: [string, 'null'], format: date-time }
+        unlocked_by: { type: [object, 'null'], properties: { id: { type: integer }, name: { type: string } } }
+        unlocked_at: { type: [string, 'null'], format: date-time }
+        unlock_reason: { type: [string, 'null'] }
+    LeaveAttachment:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        mime_type: { type: string, enum: [application/pdf, image/jpeg, image/png] }
+        size_bytes: { type: integer }
+        uploaded_by: { type: [object, 'null'], properties: { id: { type: integer }, name: { type: string } } }
+        created_at: { type: string, format: date-time }
+        can_remove: { type: boolean }

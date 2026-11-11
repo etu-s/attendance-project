@@ -8,7 +8,7 @@ to extend it safely. Read it once end to end before your first change, then use 
 > If something here disagrees with those files or with the code, the code and CLAUDE.md win; please fix
 > this guide.
 >
-> Last reviewed: 2026-11-10 (Modules 1–8 approved).
+> Last reviewed: 2026-11-11 (Modules 1–8 approved, Module 9 built and awaiting approval).
 
 ---
 
@@ -75,7 +75,7 @@ before the next starts (see [§18](#18-workflow-quality-gates-and-git)).
 | 6   | Leave Management                    | Approved 2026-10-27                              | [leave.md](modules/leave.md)                     |
 | 7   | Overtime Management                 | Approved 2026-10-28                              | [overtime.md](modules/overtime.md)               |
 | 8   | Reports & Analytics                 | Approved 2026-11-10                              | [reports.md](modules/reports.md)                 |
-| 9   | Hardening                           | Not started                                      |                                                  |
+| 9   | Hardening                           | Built, awaiting approval (2026-11-11)            | [hardening.md](modules/hardening.md)             |
 
 The status table in [CLAUDE.md](../CLAUDE.md) and [docs/README.md](README.md) is updated after every approval.
 Change history is in [CHANGELOG.md](../CHANGELOG.md).
@@ -95,7 +95,7 @@ Change history is in [CHANGELOG.md](../CHANGELOG.md).
 | Permissions        | `spatie/laravel-permission` v8, driven by a module permission catalog     |
 | Queues             | Redis + Horizon in production; `queue:work` with the database driver locally on Windows |
 | Cache              | Redis (tenancy tags cache entries per tenant)                             |
-| Real time          | Laravel Reverb — installed, **not configured yet** (Hardening; the Today board polls every 30 s) |
+| Real time          | Laravel Reverb: live Today board on a private per-workspace channel (optional; the board polls every 30 s without it) |
 | Tests              | Pest 5                                                                    |
 | Style              | Laravel Pint, `declare(strict_types=1)`, typed properties and returns     |
 
@@ -201,7 +201,7 @@ morph map, registers policies, permissions, settings and event listeners). See
 [TimetableServiceProvider.php](../app/Modules/Timetable/TimetableServiceProvider.php).
 
 Current provider order (`bootstrap/providers.php`): Tenancy, Horizon, Core, Central, Identity, Organization,
-Timetable, Scheduling, Attendance, Leave, Overtime, Reports. Keep new modules after the modules they depend on.
+Timetable, Scheduling, Attendance, Leave, Overtime, Reports, Payroll. Keep new modules after the modules they depend on.
 
 ### 5.2 How modules talk to each other
 
@@ -231,6 +231,8 @@ Timetable, Scheduling, Attendance, Leave, Overtime, Reports. Keep new modules af
 | `LeaveQuery::takenPerEmployee()` / `OvertimeQuery::summary()` / `totals()` | Leave / Overtime | Report reads of approved leave (half days) and overtime totals, scoped by visibility |
 | `OvertimeCalculator` / `OvertimeQuery` | Overtime | Overtime records from attendance days (idempotent); per-employee approved/weighted/pending totals (for Reports) |
 | `LeaveCalendar` (contract) / `LeaveChanged` (event) | Core ← Leave | Approved leave per employee and day, and its changes; Attendance consumes both without depending on Leave. Core binds an empty default |
+| `PeriodLock` (contract) / `PayrollPeriodUnlocked` (event) | Core ← Payroll | Locked payroll days: `assertOpen()` before changing a work date, `lockedDates()` to skip them when calculating; unlocking announces the days for recalculation. Core binds a no-op default |
+| `AttendanceDaysChanged` (event) | Attendance | Once per recalculation run with every changed date (Reports rollup, live Today board) |
 | `LeaveBalanceService` / `LeaveLedger` | Leave | Balances are read from (and written to) the append-only ledger only |
 
 ### 5.3 Layering inside a module
@@ -665,17 +667,28 @@ report, Exports; an Export menu on each report.
 
 Full detail: [modules/reports.md](modules/reports.md).
 
+### 12.9 Module 9 — Hardening (`Payroll` + cross-cutting) — *built, awaiting approval*
+
+- **Security:** `SecurityHeaders` middleware (strict API CSP, frame deny, HSTS over HTTPS when configured), log masking
+  on every channel (`Core\Logging\MaskSensitiveData`), `heavy` / `password` rate limiters, a route audit test.
+- **Performance:** one `AttendanceDaysChanged` per run; scoped recalculation for department/group/location schedule
+  changes; `EXPLAIN QUERY PLAN` tests; lazy report pages.
+- **Payroll periods** (`payroll_periods`): HR locks finished days, a Tenant Admin unlocks with a reason. Locked days are
+  frozen (not recalculated) and changes touching them answer `409 period_locked`.
+- **Leave attachments** (`leave_request_attachments`): PDF/JPG/PNG ≤ 5 MB, ≤ 3 per request.
+- **Password reset** (workspaces and console) and **invitations** (7-day link to set a first password).
+- **Live Today board** over Reverb (`workspace.{subdomain}.attendance`), **central audit log** page, scheduled
+  backups with retention, [deployment and restore guide](deployment.md).
+
+Full detail: [modules/hardening.md](modules/hardening.md).
+
 ---
 
 ## 13. Planned modules and their domain rules
 
-These rules are fixed by CLAUDE.md and must be honoured when the modules are built. Each still gets its own
-plan and approval.
-
-**Module 9 — Hardening.** Performance, security review, operational polish.
-
-Mandatory edge-case tests across these modules: overnight shifts, DST, duplicate punches, missing punches,
-mid-period schedule changes, backdated corrections, leave overlapping holidays, negative balances.
+All nine modules are built. Every new feature still follows the workflow in §18 (plan, approval, one module or
+change at a time). Mandatory edge-case tests in every area: overnight shifts, DST, duplicate punches, missing
+punches, mid-period schedule changes, backdated corrections, leave overlapping holidays, negative balances.
 
 ---
 
@@ -772,7 +785,7 @@ the origin to `SANCTUM_STATEFUL_DOMAINS`.
 | `php artisan migrate --seed` | central schema + plans (+ super admin and demo tenant `acme` in local) |
 | `php artisan tenants:migrate` | run tenant migrations on every tenant DB |
 | `php artisan tenants:seed --force` | re-sync roles/permissions, missing settings and defaults (idempotent) |
-| `php artisan db:backup [--tenant=ID]` | `VACUUM INTO` backups |
+| `php artisan db:backup [--tenant=ID] [--prune]` | `VACUUM INTO` backups; `--prune` deletes folders older than `BACKUP_KEEP_DAYS` (scheduled daily 02:30) |
 | `php artisan route:list --path=api --except-vendor` | live endpoint list |
 | `php artisan punches:simulate --tenant=acme` | punches from real schedules (`--http --key=…` posts through the API; `--overtime-rate` sets who stays late) |
 | `php artisan attendance:close-days` | re-evaluate recent days (scheduled every 15 minutes) |
@@ -901,11 +914,8 @@ local dev.
 
 ## 19. Known limitations and open follow-ups
 
-- Reverb installed but not configured (Hardening); the Today board polls every 30 s.
 - Horizon cannot run on Windows; use `queue:work`.
-- No password reset / invitation email flow; admins set passwords.
 - No restore endpoint for soft-deleted users (email stays reserved).
-- Central audit log recorded but no API/UI.
 - Plan `features` JSON stored but not enforced (`max_employees` is enforced by Organization).
 - Transfers/terminations cannot be undone — correct with another dated change; history rows are not editable.
 - Department Manager visibility is "as of today"; historical membership views belong to Reports.
@@ -913,8 +923,9 @@ local dev.
 - `ScheduleChanged` for a department/group/location recalculates everyone employed in the range (unchanged days are skipped).
 - New employee codes are not checked against punch identifiers (the code wins for new punches).
 - A pending punch correction cannot be withdrawn by its requester.
-- Leave: half days only (no hourly leave), no attachments yet (Hardening), no automatic cancellation of future leave on termination, year-end carry is not redone for late changes in a closed leave year.
-- Overtime: no payroll period locking (a recalculation can reopen paid overtime, flagged `changed_after_decision`), one rule set per workspace, weighted minutes only (no money), no pre-approval, work on full leave days only via manual entries.
+- Leave: half days only (no hourly leave), no automatic cancellation of future leave on termination, year-end carry is not redone for late changes in a closed leave year.
+- Overtime: lock paid days with payroll periods (Module 9), one rule set per workspace, weighted minutes only (no money), no pre-approval, work on full leave days only via manual entries.
+- Hardening follow-ups: no decision emails, setting a password does not end other browser sessions, no PDF exports or hourly leave.
 - Reports: no PDF, scheduled or emailed reports; leave and overtime reports ignore location/group and use the current
   department; a large backfill refreshes each date once per recalculated employee; no payroll period locking yet.
 - Temporary schedules are per employee only; moving holidays (Eid, etc.) are entered each year.

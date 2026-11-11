@@ -152,10 +152,10 @@ touch database/central.sqlite && mkdir -p database/tenants
 php artisan migrate --seed           # central schema + plans (+ super admin and demo tenant "acme" in local)
 php artisan tenants:migrate          # migrate all tenant SQLite files
 php artisan tenants:seed --force     # re-sync roles/permissions + missing settings in every tenant (idempotent)
-php artisan db:backup                # VACUUM INTO backups of central + tenants -> storage/backups/<timestamp>/
+php artisan db:backup [--prune]      # VACUUM INTO backups of central + tenants -> storage/backups/<timestamp>/ (--prune: drop folders older than BACKUP_KEEP_DAYS; scheduled daily)
 php artisan serve
 php artisan horizon                  # Linux only (needs pcntl); on Windows use: php artisan queue:work
-php artisan reverb:start             # installed, not configured yet
+php artisan reverb:start             # WebSocket server for the live Today board (optional; set BROADCAST_CONNECTION=reverb)
 php artisan punches:simulate --tenant=acme   # simulated punches from real schedules (--http --key=... via the API)
 php artisan attendance:close-days    # re-evaluate recent days (scheduled every 15 min)
 php artisan leave:accrue             # leave grants, accruals, carry-forward, expiry (scheduled hourly, idempotent)
@@ -205,4 +205,4 @@ npm run build
 | 6   | Leave Management                    | Approved (2026-10-27) |
 | 7   | Overtime Management                 | Approved (2026-10-28) |
 | 8   | Reports & Analytics                 | Approved (2026-11-10) |
-| 9   | Hardening                           | Not started |
+| 9   | Hardening                           | Built, awaiting approval (2026-11-11) |
