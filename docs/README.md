@@ -14,4 +14,5 @@ Start with the [System Guide](SYSTEM_GUIDE.md): architecture, tenancy, conventio
 | 8   | Reports & Analytics                 | Approved (2026-11-10)    | [modules/reports.md](modules/reports.md) |
 | 9   | Hardening                           | Approved (2026-11-11)    | [modules/hardening.md](modules/hardening.md) |
 
-API reference: [api/openapi.yaml](api/openapi.yaml)
+API reference: [api/openapi.yaml](api/openapi.yaml) · Operations: [deployment.md](deployment.md) ·
+[docker.md](docker.md)

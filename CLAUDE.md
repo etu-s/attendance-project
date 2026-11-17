@@ -165,6 +165,10 @@ php artisan schedule:work            # run the scheduler locally
 composer test          # Pest
 ./vendor/bin/pint      # format
 
+# Docker (run from docker/; see docs/docker.md)
+cp .env.example .env && docker compose up -d --build   # http://localhost:8080, http://acme.localhost:8080
+docker compose exec app php artisan <command>
+
 # Frontend
 cd frontend
 npm install

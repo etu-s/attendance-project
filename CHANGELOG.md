@@ -4,6 +4,13 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ## [Unreleased]
 
+### Added — Docker
+
+- `docker/`: multi-stage `Dockerfile` (`app`: PHP 8.4-FPM with pcntl, intl, zip, redis, opcache; `web`: nginx with
+  the built SPA) and `compose.yaml` with `init` (migrations + idempotent seeding), `app`, `horizon`, `scheduler`,
+  `reverb`, `web` and `redis`. SQLite databases, storage and backups live on named volumes; `APP_KEY` is generated
+  once onto the data volume when not set. Reverb is proxied on the same host at `/app`. Guide: `docs/docker.md`.
+
 ### Added — Module 9: Hardening
 
 - Security: headers on every API response (strict CSP, frame deny, nosniff, HSTS over HTTPS when configured);

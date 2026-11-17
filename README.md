@@ -22,6 +22,15 @@ Open http://localhost:5173 for the super admin console (`admin@ams.test` / `pass
 http://acme.localhost:5173 for the demo tenant (`admin@acme.test` / `password1`). These are local seed
 accounts defined in `.env` (`SEED_*`).
 
+## Docker
+
+```bash
+cd docker && cp .env.example .env && docker compose up -d --build
+```
+
+Then http://localhost:8080 (console) and http://acme.localhost:8080 (demo workspace), same accounts as above.
+Services, volumes, configuration and production notes: [docs/docker.md](docs/docker.md).
+
 ## Quality gates
 
 ```bash

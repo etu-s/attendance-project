@@ -2,6 +2,7 @@
 
 How to run AMS in production and keep it healthy. Local development is in the
 [System Guide](SYSTEM_GUIDE.md) §15. Rules that bind every environment are in [CLAUDE.md](../CLAUDE.md).
+To run the whole stack in containers instead of the processes below, see [Docker](docker.md).
 
 ## 1. What runs where
 

@@ -1,0 +1,44 @@
+# Build context for docker/Dockerfile. Keep secrets, local databases and
+# machine-specific build output out of every image.
+.git
+.github
+.claude
+.idea
+.vscode
+docker/.env
+
+**/.env
+**/.env.*
+!.env.example
+!frontend/.env.example
+
+vendor
+node_modules
+frontend/node_modules
+frontend/dist
+public/build
+public/hot
+public/storage
+
+# SQLite databases (central + tenants) and their side files
+database/*.sqlite
+database/tenants
+**/*.sqlite
+**/*.sqlite-wal
+**/*.sqlite-shm
+**/*.sqlite-journal
+
+# Runtime state; the containers keep it on volumes
+bootstrap/cache/*.php
+storage/logs/*
+storage/framework/cache/*
+storage/framework/sessions/*
+storage/framework/views/*
+storage/framework/testing
+storage/backups
+storage/tmp
+storage/pail
+storage/tenant*
+storage/*.key
+.phpunit.cache
+.phpunit.result.cache

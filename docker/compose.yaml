@@ -1,0 +1,123 @@
+# AMS on Docker: run every command from this folder (docker/), so Compose reads
+# docker/.env both for the settings below and for the containers' environment.
+#
+#   cp .env.example .env
+#   docker compose up -d --build
+#
+# See docs/docker.md.
+name: ams
+
+x-app: &app
+  image: ams-app:latest
+  build:
+    context: ..
+    dockerfile: docker/Dockerfile
+    target: app
+  env_file: .env
+  environment:
+    # Fixed by the stack, not by docker/.env.
+    DB_CONNECTION: central
+    DB_DATABASE: /var/www/data/central.sqlite
+    TENANT_DB_DIRECTORY: /var/www/data/tenants
+    BACKUP_PATH: /var/www/backups
+    REDIS_CLIENT: phpredis
+    REDIS_HOST: redis
+    REDIS_PORT: "6379"
+    QUEUE_CONNECTION: redis
+    CACHE_STORE: redis
+    # The API publishes events to Reverb over the internal network.
+    REVERB_HOST: reverb
+    REVERB_PORT: "8080"
+    REVERB_SCHEME: http
+    LOG_CHANNEL: stack
+    LOG_STACK: stderr
+    # Derived from AMS_SCHEME / AMS_DOMAIN / AMS_HTTP_PORT unless set in docker/.env.
+    APP_URL: ${APP_URL:-${AMS_SCHEME:-http}://${AMS_DOMAIN:-localhost}:${AMS_HTTP_PORT:-8080}}
+    FRONTEND_URL: ${FRONTEND_URL:-${AMS_SCHEME:-http}://${AMS_DOMAIN:-localhost}:${AMS_HTTP_PORT:-8080}}
+    CENTRAL_DOMAINS: ${CENTRAL_DOMAINS:-${AMS_DOMAIN:-localhost},127.0.0.1}
+    SANCTUM_STATEFUL_DOMAINS: ${SANCTUM_STATEFUL_DOMAINS:-${AMS_DOMAIN:-localhost},${AMS_DOMAIN:-localhost}:${AMS_HTTP_PORT:-8080},*.${AMS_DOMAIN:-localhost},*.${AMS_DOMAIN:-localhost}:${AMS_HTTP_PORT:-8080}}
+  volumes:
+    - data:/var/www/data
+    - storage:/var/www/html/storage
+    - backups:/var/www/backups
+  restart: unless-stopped
+
+x-after-init: &after-init
+  init:
+    condition: service_completed_successfully
+  redis:
+    condition: service_healthy
+
+services:
+  # One-shot: migrations (central + every workspace) and idempotent seeding.
+  init:
+    <<: *app
+    command: ["init"]
+    restart: "no"
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  app:
+    <<: *app
+    command: ["php-fpm"]
+    depends_on: *after-init
+
+  # Queue workers: punches, recalculation, exports, emails.
+  horizon:
+    <<: *app
+    command: ["php", "artisan", "horizon"]
+    stop_grace_period: 60s
+    depends_on: *after-init
+
+  # close-days, leave accrual, export pruning, daily backups.
+  scheduler:
+    <<: *app
+    command: ["php", "artisan", "schedule:work"]
+    depends_on: *after-init
+
+  # WebSockets for the live Today board, reached through nginx at /app.
+  reverb:
+    <<: *app
+    command: ["php", "artisan", "reverb:start", "--host=0.0.0.0", "--port=8080"]
+    depends_on: *after-init
+
+  web:
+    image: ams-web:latest
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: web
+      args:
+        SPA_CENTRAL_DOMAINS: ${CENTRAL_DOMAINS:-${AMS_DOMAIN:-localhost},127.0.0.1}
+        SPA_REVERB_APP_KEY: ${REVERB_APP_KEY:-}
+        SPA_REVERB_PORT: ${AMS_PUBLIC_PORT:-${AMS_HTTP_PORT:-8080}}
+        SPA_REVERB_SCHEME: ${AMS_SCHEME:-http}
+    ports:
+      - "${AMS_HTTP_PORT:-8080}:80"
+    restart: unless-stopped
+    depends_on:
+      - app
+      - reverb
+
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  # Central + workspace SQLite files and the generated APP_KEY. Keep it a named
+  # volume: SQLite WAL needs a real Linux filesystem, not a Windows/macOS bind mount.
+  data:
+  # Logs, sessions, workspace files (leave attachments, report exports).
+  storage:
+  # db:backup output (VACUUM INTO). Copy it off the host regularly.
+  backups:
+  redis:
